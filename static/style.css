@@ -1,0 +1,157 @@
+:root {
+    --border-color: #e5e5e5;
+    --text-main: #333;
+    --text-muted: #8e8e93;
+    --bg-color: #fff;
+    --event-bg: rgba(255, 59, 48, 0.15); /* Apple Calendar Red */
+    --event-border: #ff3b30;
+    --event-text: #d70015;
+}
+
+* {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    overscroll-behavior-y: none; /* Prevents pull-to-refresh on mobile */
+}
+
+/* --- App Layout --- */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h2 {
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+/* --- Calendar Grid --- */
+.calendar-container {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(80px, 1fr));
+    grid-template-rows: 60px repeat(24, 40px); /* 1 header row, 24 half-hour blocks */
+    overflow-y: auto;
+    overflow-x: auto;
+    border-top: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color);
+    touch-action: none; /* Crucial for touch dragging */
+    user-select: none;  /* Prevents text selection while dragging */
+}
+
+/* Headers */
+.header-corner {
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background: #f9f9f9;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 20;
+}
+
+.day-header {
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background: #f9f9f9;
+    text-align: center;
+    padding: 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.day-name {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.day-number {
+    font-size: 20px;
+    font-weight: 400;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    margin: 0 auto;
+    border-radius: 50%;
+}
+
+/* Make today look like Apple Calendar */
+.day-header.today .day-number {
+    background-color: #ff3b30;
+    color: white;
+    font-weight: 600;
+}
+.day-header.today .day-name {
+    color: #ff3b30;
+}
+
+/* Time Column */
+.time-label {
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    text-align: right;
+    padding-right: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-color);
+    position: sticky;
+    left: 0;
+    z-index: 5;
+}
+
+.time-label span {
+    position: absolute;
+    top: -8px; /* Centers text on the line */
+    right: 8px;
+    background: var(--bg-color);
+}
+
+/* Time Slots */
+.slot {
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid #f2f2f2; /* Lighter line for half hours */
+    cursor: crosshair;
+    transition: background-color 0.1s;
+    position: relative;
+}
+
+.slot:nth-child(even) {
+    border-bottom: 1px solid var(--border-color); /* Darker line for full hours */
+}
+
+/* Apple-style selected events */
+.slot.selected {
+    background-color: var(--event-bg);
+    border-left: 3px solid var(--event-border);
+}
+
+/* Inner text for the start block */
+.slot-text {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--event-text);
+    pointer-events: none; /* So text doesn't interfere with dragging */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: calc(100% - 10px);
+}
