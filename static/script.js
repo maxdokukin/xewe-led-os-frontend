@@ -70,9 +70,9 @@ function renderEventUI(eventId) {
         }
     });
 
-    const mainCmd = event.commands[0] || "Empty Script";
-    const extraCount = event.commands.length - 1;
-    const displayText = extraCount > 0 ? `> ${mainCmd} <span style="color:var(--text-muted); font-size:10px;">(+${extraCount})</span>` : `> ${mainCmd}`;
+    const allCmdsHTML = event.commands.map(cmd =>
+        `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">> ${cmd}</div>`
+    ).join('');
 
     for (const day in slotsByDay) {
         const daySlots = slotsByDay[day];
@@ -81,13 +81,36 @@ function renderEventUI(eventId) {
             const timeB = b.dataset.time.split(':').map(Number);
             return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
         });
+
         if (daySlots[0]) {
-            daySlots[0].innerHTML = `<span class="slot-text" style="font-family: monospace;">${displayText}</span>`;
+            const numSlots = daySlots.length;
+            daySlots[0].style.position = 'relative';
+
+            daySlots[0].innerHTML = `
+                <div class="slot-text" style="
+                    position: absolute; 
+                    top: 0; 
+                    left: 0; 
+                    width: 100%; 
+                    height: ${numSlots * 100}%; 
+                    overflow: hidden; 
+                    font-family: monospace; 
+                    font-size: 11px; 
+                    padding: 4px 6px; 
+                    box-sizing: border-box;
+                    pointer-events: none;
+                    line-height: 1.5;
+                    color: inherit;
+                    z-index: 10;
+                ">
+                    ${allCmdsHTML}
+                </div>
+            `;
         }
     }
 }
 
-// --- MODAL UI (Text Area Pop-up) ---
+// --- MODAL UI ---
 const modalOverlay = document.createElement('div');
 modalOverlay.style.position = 'fixed';
 modalOverlay.style.top = '0';
@@ -124,6 +147,7 @@ modalTextarea.style.border = '1px solid #ccc';
 modalTextarea.style.fontFamily = 'monospace';
 modalTextarea.style.fontSize = '14px';
 modalTextarea.style.resize = 'vertical';
+modalTextarea.style.boxSizing = 'border-box';
 
 const modalBtnContainer = document.createElement('div');
 modalBtnContainer.style.display = 'flex';
@@ -238,10 +262,12 @@ document.addEventListener('pointerdown', (e) => {
     }
 });
 
-// Edit Existing Commands Logic (Using Modal)
+// Edit Existing Commands Logic (BUG FIXED HERE)
 editCmdBtn.addEventListener('click', () => {
     if (activeEventId && eventDatabase[activeEventId]) {
-        const currentCmds = eventDatabase[activeEventId].commands.join('\n');
+        // We MUST save the ID to a local variable before hideMenu() wipes it out
+        const currentEventId = activeEventId;
+        const currentCmds = eventDatabase[currentEventId].commands.join('\n');
 
         openModal('Edit Commands', currentCmds, (editedCmds) => {
             if (editedCmds !== null) {
@@ -249,28 +275,27 @@ editCmdBtn.addEventListener('click', () => {
                     .map(cmd => cmd.trim())
                     .filter(cmd => cmd !== "");
 
-                // If they cleared all text, you could optionally delete the event,
-                // but let's just save an empty array or fallback to "Empty Script"
-                eventDatabase[activeEventId].commands = newCommandArray;
-                renderEventUI(activeEventId);
+                eventDatabase[currentEventId].commands = newCommandArray;
+                renderEventUI(currentEventId);
                 console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
             }
         });
     }
-    hideMenu();
+    hideMenu(); // This wipes activeEventId, but our callback uses currentEventId now!
 });
 
 // Delete Button Logic
 deleteBtn.addEventListener('click', () => {
     if (activeEventId) {
-        const slots = document.querySelectorAll(`.slot[data-event-id="${activeEventId}"]`);
+        const currentEventId = activeEventId;
+        const slots = document.querySelectorAll(`.slot[data-event-id="${currentEventId}"]`);
         slots.forEach(slot => {
             slot.classList.remove('selected');
             slot.innerHTML = '';
             delete slot.dataset.eventId;
         });
 
-        delete eventDatabase[activeEventId];
+        delete eventDatabase[currentEventId];
         console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
     }
     hideMenu();
@@ -291,7 +316,7 @@ function toggleSlot(slot) {
 }
 
 calendar.addEventListener('pointerdown', (e) => {
-    if (modalOverlay.style.display === 'flex') return; // Don't drag if modal is open
+    if (modalOverlay.style.display === 'flex') return;
 
     const slot = e.target.closest('.slot');
     if (!slot) return;
@@ -360,7 +385,6 @@ window.addEventListener('pointerup', () => {
 
                 renderEventUI(uniqueEventId);
             } else {
-                // If cancelled or empty, revert the blocks
                 savedSession.forEach(slot => slot.classList.remove('selected'));
             }
         });
