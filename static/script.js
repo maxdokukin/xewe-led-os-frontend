@@ -2,9 +2,11 @@ const calendar = document.getElementById('calendar');
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const startHour = 0;
 const endHour = 24;
+const totalRows = (endHour - startHour) * 4;
 
 // --- DATA LAYER ---
 let eventDatabase = {};
+let copiedBlockData = null;
 
 // --- DYNAMIC SCALE UI ---
 const controlBar = document.createElement('div');
@@ -21,16 +23,14 @@ scaleSlider.max = '50';
 scaleSlider.value = '29';
 scaleSlider.className = 'scale-slider';
 
-// Re-add the value display element
 const scaleValueDisplay = document.createElement('span');
 scaleValueDisplay.textContent = scaleSlider.value;
 scaleValueDisplay.className = 'scale-value';
 
 controlBar.appendChild(scaleLabel);
 controlBar.appendChild(scaleSlider);
-controlBar.appendChild(scaleValueDisplay); // Append it to the bar
+controlBar.appendChild(scaleValueDisplay);
 
-// Insert control bar AFTER the calendar
 calendar.after(controlBar);
 
 const dynamicStyle = document.createElement('style');
@@ -44,8 +44,8 @@ calendar.appendChild(nowLine);
 let nowLineTimer = null;
 
 function getTodayIndex() {
-    const jsDay = new Date().getDay(); // Sun=0 ... Sat=6
-    return jsDay === 0 ? 6 : jsDay - 1; // Mon=0 ... Sun=6
+    const jsDay = new Date().getDay();
+    return jsDay === 0 ? 6 : jsDay - 1;
 }
 
 function updateNowIndicator() {
@@ -63,14 +63,13 @@ function updateNowIndicator() {
     const hours = now.getHours();
     const minutes = now.getMinutes();
 
-    // Hide the line if outside the displayed calendar range
     if (hours < startHour || hours >= endHour) {
         nowLine.style.display = 'none';
         return;
     }
 
     const pixelsPerHour = parseFloat(scaleSlider.value);
-    const headerHeight = 60; // matches your grid header row
+    const headerHeight = 60;
     const top = headerHeight + ((hours - startHour) + (minutes / 60)) * pixelsPerHour;
 
     nowLine.style.display = 'block';
@@ -90,7 +89,6 @@ function startNowIndicator() {
 }
 
 function updateScale(pixelsPerHour) {
-    // Update the text display whenever the slider moves
     scaleValueDisplay.textContent = pixelsPerHour;
 
     const quarterHourPx = pixelsPerHour / 4;
@@ -163,21 +161,39 @@ function detectColorFromCommands(text) {
     return null;
 }
 
+// --- GRID / SLOT HELPERS ---
+function timeToRow(time) {
+    const [hour, minute] = time.split(':').map(Number);
+    return ((hour - startHour) * 4) + Math.floor(minute / 15);
+}
+
+function rowToTime(row) {
+    const totalMinutes = (startHour * 60) + (row * 15);
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    return `${hour}:${String(minute).padStart(2, '0')}`;
+}
+
+function getSlotByDayRow(day, row) {
+    return document.querySelector(`.slot[data-day="${day}"][data-row="${row}"]`);
+}
+
+function generateEventId() {
+    return `evt-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+}
+
 // 1. Build the Grid
 function initCalendar() {
     const corner = document.createElement('div');
     corner.className = 'header-corner';
     calendar.appendChild(corner);
 
-    // Get today's index (0-6) to highlight the current day
     const jsDay = new Date().getDay();
     const todayIdx = jsDay === 0 ? 6 : jsDay - 1;
 
     for (let i = 0; i < 7; i++) {
         const header = document.createElement('div');
         header.className = `day-header ${i === todayIdx ? 'today' : ''}`;
-
-        // Simplified: Only the day name, no date calculations
         header.innerHTML = `
             <div class="day-name">${days[i]}</div>
         `;
@@ -209,7 +225,6 @@ function initCalendar() {
                 const mins = qtr === 0 ? '00' : qtr === 1 ? '15' : qtr === 2 ? '30' : '45';
                 slot.dataset.time = `${h}:${mins}`;
 
-                // REQUIRED CHANGE: stable row index so drag selection can fill the full range
                 const row = (h - startHour) * 4 + qtr;
                 slot.dataset.row = row;
 
@@ -246,6 +261,7 @@ function renderEventUI(eventId) {
     slots.forEach(s => {
         s.innerHTML = '';
         s.style.backgroundColor = event.color || '#007aff';
+        s.classList.add('selected');
     });
 
     const slotsByDay = {};
@@ -280,6 +296,86 @@ function renderEventUI(eventId) {
             `;
         }
     }
+}
+
+// --- COPY / PASTE HELPERS ---
+function copyEventToClipboard(eventId) {
+    const event = eventDatabase[eventId];
+    if (!event || !event.slots || event.slots.length === 0) return;
+
+    const normalizedSlots = event.slots.map(slot => ({
+        day: Number(slot.day),
+        row: timeToRow(slot.time)
+    }));
+
+    const minDay = Math.min(...normalizedSlots.map(s => s.day));
+    const minRow = Math.min(...normalizedSlots.map(s => s.row));
+
+    copiedBlockData = {
+        commands: [...event.commands],
+        color: event.color || '#007aff',
+        offsets: normalizedSlots.map(slot => ({
+            dayOffset: slot.day - minDay,
+            rowOffset: slot.row - minRow
+        }))
+    };
+}
+
+function canPasteBlockAt(targetSlot, clipboardData) {
+    if (!targetSlot || !clipboardData) return false;
+
+    const baseDay = Number(targetSlot.dataset.day);
+    const baseRow = Number(targetSlot.dataset.row);
+
+    for (const offset of clipboardData.offsets) {
+        const targetDay = baseDay + offset.dayOffset;
+        const targetRow = baseRow + offset.rowOffset;
+
+        if (targetDay < 0 || targetDay > 6) return false;
+        if (targetRow < 0 || targetRow >= totalRows) return false;
+
+        const domSlot = getSlotByDayRow(targetDay, targetRow);
+        if (!domSlot || domSlot.dataset.eventId) return false;
+    }
+
+    return true;
+}
+
+function pasteCopiedBlockAt(targetSlot) {
+    if (!targetSlot || !copiedBlockData) return false;
+    if (!canPasteBlockAt(targetSlot, copiedBlockData)) return false;
+
+    const baseDay = Number(targetSlot.dataset.day);
+    const baseRow = Number(targetSlot.dataset.row);
+    const uniqueEventId = generateEventId();
+
+    const newRecord = {
+        id: uniqueEventId,
+        commands: [...copiedBlockData.commands],
+        color: copiedBlockData.color,
+        slots: []
+    };
+
+    copiedBlockData.offsets.forEach(offset => {
+        const day = baseDay + offset.dayOffset;
+        const row = baseRow + offset.rowOffset;
+        const domSlot = getSlotByDayRow(day, row);
+
+        if (domSlot) {
+            domSlot.dataset.eventId = uniqueEventId;
+            domSlot.classList.add('selected');
+
+            newRecord.slots.push({
+                day,
+                time: rowToTime(row)
+            });
+        }
+    });
+
+    eventDatabase[uniqueEventId] = newRecord;
+    renderEventUI(uniqueEventId);
+    console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
+    return true;
 }
 
 // --- MODAL UI ---
@@ -367,8 +463,7 @@ saveModalBtn.onclick = () => {
     closeModal();
 };
 
-
-// 2. Build the Edit/Delete Menu UI
+// 2. Build the Edit/Delete/Copy/Paste Menu UI
 const menu = document.createElement('div');
 menu.className = 'context-menu';
 
@@ -376,19 +471,53 @@ const editCmdBtn = document.createElement('button');
 editCmdBtn.textContent = 'Edit Commands / Color';
 editCmdBtn.className = 'menu-btn';
 
+const copyBtn = document.createElement('button');
+copyBtn.textContent = 'Copy Block';
+copyBtn.className = 'menu-btn';
+
+const pasteBtn = document.createElement('button');
+pasteBtn.textContent = 'Paste Block';
+pasteBtn.className = 'menu-btn';
+
 const deleteBtn = document.createElement('button');
 deleteBtn.textContent = 'Delete Block';
 deleteBtn.className = 'menu-btn menu-btn-delete';
 
 menu.appendChild(editCmdBtn);
+menu.appendChild(copyBtn);
+menu.appendChild(pasteBtn);
 menu.appendChild(deleteBtn);
 document.body.appendChild(menu);
 
 let activeEventId = null;
+let menuTargetSlot = null;
 
 function hideMenu() {
     menu.style.display = 'none';
     activeEventId = null;
+    menuTargetSlot = null;
+}
+
+function showMenu(x, y, { eventId = null, targetSlot = null } = {}) {
+    activeEventId = eventId;
+    menuTargetSlot = targetSlot;
+
+    const hasEvent = !!eventId;
+    const isEmptySlotTarget = !!(targetSlot && !targetSlot.dataset.eventId);
+    const canPaste = isEmptySlotTarget && copiedBlockData && canPasteBlockAt(targetSlot, copiedBlockData);
+
+    editCmdBtn.style.display = hasEvent ? 'block' : 'none';
+    copyBtn.style.display = hasEvent ? 'block' : 'none';
+    deleteBtn.style.display = hasEvent ? 'block' : 'none';
+
+    pasteBtn.style.display = targetSlot ? 'block' : 'none';
+    pasteBtn.disabled = !canPaste;
+    pasteBtn.style.opacity = canPaste ? '1' : '0.5';
+    pasteBtn.style.cursor = canPaste ? 'pointer' : 'not-allowed';
+
+    menu.style.display = 'flex';
+    menu.style.left = `${Math.min(x + 10, window.innerWidth - 180)}px`;
+    menu.style.top = `${Math.min(y + 10, window.innerHeight - 220)}px`;
 }
 
 document.addEventListener('pointerdown', (e) => {
@@ -420,6 +549,23 @@ editCmdBtn.addEventListener('click', () => {
     hideMenu();
 });
 
+// Copy Logic
+copyBtn.addEventListener('click', () => {
+    if (activeEventId && eventDatabase[activeEventId]) {
+        copyEventToClipboard(activeEventId);
+    }
+    hideMenu();
+});
+
+// Paste Logic
+pasteBtn.addEventListener('click', () => {
+    if (!menuTargetSlot || !copiedBlockData) return;
+    if (canPasteBlockAt(menuTargetSlot, copiedBlockData)) {
+        pasteCopiedBlockAt(menuTargetSlot);
+    }
+    hideMenu();
+});
+
 // Delete Logic
 deleteBtn.addEventListener('click', () => {
     if (activeEventId) {
@@ -438,10 +584,7 @@ deleteBtn.addEventListener('click', () => {
     hideMenu();
 });
 
-
 // 3. Drag and Drop Interaction
-// REQUIRED CHANGE: derive the selected block from anchor row -> current row,
-// instead of relying on every hovered 15-minute cell being hit by pointermove.
 let isDragging = false;
 let dragAnchor = null;
 let currentDragSession = new Set();
@@ -480,18 +623,17 @@ function updateDragSelection(currentSlot) {
 
 calendar.addEventListener('pointerdown', (e) => {
     if (modalOverlay.style.display === 'flex') return;
+    if (e.button !== 0) return;
 
     const slot = e.target.closest('.slot[data-day][data-row]');
     if (!slot) return;
 
-    if (slot.classList.contains('selected')) {
+    if (slot.classList.contains('selected') && slot.dataset.eventId) {
         isDragging = false;
-        activeEventId = slot.dataset.eventId;
-
-        menu.style.display = 'flex';
-        const menuX = Math.min(e.clientX + 10, window.innerWidth - 150);
-        menu.style.left = `${menuX}px`;
-        menu.style.top = `${e.clientY + 10}px`;
+        showMenu(e.clientX, e.clientY, {
+            eventId: slot.dataset.eventId,
+            targetSlot: slot
+        });
         return;
     }
 
@@ -532,7 +674,7 @@ window.addEventListener('pointerup', () => {
                     .map(cmd => cmd.trim())
                     .filter(cmd => cmd !== "");
 
-                const uniqueEventId = 'evt-' + Date.now();
+                const uniqueEventId = generateEventId();
 
                 const newRecord = {
                     id: uniqueEventId,
@@ -544,7 +686,7 @@ window.addEventListener('pointerup', () => {
                 savedSession.forEach(slot => {
                     slot.dataset.eventId = uniqueEventId;
                     newRecord.slots.push({
-                        day: slot.dataset.day,
+                        day: Number(slot.dataset.day),
                         time: slot.dataset.time
                     });
                 });
@@ -565,4 +707,20 @@ window.addEventListener('pointerup', () => {
     currentDragSession.clear();
 });
 
-calendar.addEventListener('contextmenu', e => e.preventDefault());
+// Right-click menu support for both existing blocks and empty slots
+calendar.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+
+    if (modalOverlay.style.display === 'flex') return;
+
+    const slot = e.target.closest('.slot[data-day][data-row]');
+    if (!slot) {
+        hideMenu();
+        return;
+    }
+
+    showMenu(e.clientX, e.clientY, {
+        eventId: slot.dataset.eventId || null,
+        targetSlot: slot
+    });
+});
