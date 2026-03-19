@@ -164,7 +164,6 @@ function detectColorFromCommands(text) {
 }
 
 // 1. Build the Grid
-// 1. Build the Grid
 function initCalendar() {
     const corner = document.createElement('div');
     corner.className = 'header-corner';
@@ -186,7 +185,7 @@ function initCalendar() {
     }
 
     for (let h = startHour; h < endHour; h++) {
-        for(let qtr = 0; qtr < 4; qtr++) {
+        for (let qtr = 0; qtr < 4; qtr++) {
             const timeLabel = document.createElement('div');
             timeLabel.className = 'time-label';
 
@@ -209,6 +208,11 @@ function initCalendar() {
 
                 const mins = qtr === 0 ? '00' : qtr === 1 ? '15' : qtr === 2 ? '30' : '45';
                 slot.dataset.time = `${h}:${mins}`;
+
+                // REQUIRED CHANGE: stable row index so drag selection can fill the full range
+                const row = (h - startHour) * 4 + qtr;
+                slot.dataset.row = row;
+
                 calendar.appendChild(slot);
             }
         }
@@ -436,22 +440,48 @@ deleteBtn.addEventListener('click', () => {
 
 
 // 3. Drag and Drop Interaction
+// REQUIRED CHANGE: derive the selected block from anchor row -> current row,
+// instead of relying on every hovered 15-minute cell being hit by pointermove.
 let isDragging = false;
+let dragAnchor = null;
 let currentDragSession = new Set();
-let lastHoveredElement = null;
 
-function toggleSlot(slot) {
-    if (!slot || !slot.classList.contains('slot')) return;
-    if (currentDragSession.has(slot)) return;
+function updateDragSelection(currentSlot) {
+    if (!dragAnchor || !currentSlot) return;
+    if (currentSlot.dataset.day !== dragAnchor.dataset.day) return;
 
-    currentDragSession.add(slot);
-    slot.classList.add('selected');
+    const day = dragAnchor.dataset.day;
+    const startRow = Math.min(
+        Number(dragAnchor.dataset.row),
+        Number(currentSlot.dataset.row)
+    );
+    const endRow = Math.max(
+        Number(dragAnchor.dataset.row),
+        Number(currentSlot.dataset.row)
+    );
+
+    const nextSession = new Set();
+
+    document.querySelectorAll(`.slot[data-day="${day}"][data-row]`).forEach(slot => {
+        const row = Number(slot.dataset.row);
+        const inRange = row >= startRow && row <= endRow;
+        const isFree = !slot.dataset.eventId;
+
+        if (inRange && isFree) {
+            nextSession.add(slot);
+            slot.classList.add('selected');
+        } else if (currentDragSession.has(slot)) {
+            slot.classList.remove('selected');
+        }
+    });
+
+    currentDragSession = nextSession;
 }
 
 calendar.addEventListener('pointerdown', (e) => {
     if (modalOverlay.style.display === 'flex') return;
 
-    const slot = e.target.closest('.slot');
+    const slot = e.target.closest('.slot[data-day][data-row]');
     if (!slot) return;
 
     if (slot.classList.contains('selected')) {
@@ -467,26 +497,31 @@ calendar.addEventListener('pointerdown', (e) => {
 
     hideMenu();
     isDragging = true;
-    currentDragSession.clear();
-    toggleSlot(slot);
-    slot.releasePointerCapture(e.pointerId);
+    dragAnchor = slot;
+    currentDragSession = new Set();
+
+    if (calendar.setPointerCapture) {
+        calendar.setPointerCapture(e.pointerId);
+    }
+
+    updateDragSelection(slot);
 });
 
 calendar.addEventListener('pointermove', (e) => {
     if (!isDragging) return;
 
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (el && el !== lastHoveredElement) {
-        lastHoveredElement = el;
-        const slot = el.closest('.slot');
-        if (slot) toggleSlot(slot);
+    const slot = el ? el.closest('.slot[data-day][data-row]') : null;
+
+    if (slot) {
+        updateDragSelection(slot);
     }
 });
 
 window.addEventListener('pointerup', () => {
     if (!isDragging) return;
     isDragging = false;
-    lastHoveredElement = null;
+    dragAnchor = null;
 
     if (currentDragSession.size > 0) {
         const savedSession = Array.from(currentDragSession);
