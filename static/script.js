@@ -19,22 +19,29 @@ function rgbToHex(r, g, b) {
 }
 
 function hsvToHex(h, s, v) {
-    // Assumes standard ranges: H[0-360], S[0-100], V[0-100]
-    h = clamp(parseInt(h), 0, 360);
-    s = clamp(parseInt(s), 0, 100) / 100;
-    v = clamp(parseInt(v), 0, 100) / 100;
+    // Hardware/FastLED format: H, S, and V are all 0-255
+    h = clamp(parseInt(h), 0, 255);
+    s = clamp(parseInt(s), 0, 255);
+    v = clamp(parseInt(v), 0, 255);
 
-    let c = v * s;
-    let x = c * (1 - Math.abs((h / 60) % 2 - 1));
-    let m = v - c;
+    // Convert to standard math formats for the conversion algorithm:
+    // Hue -> 0-360 degrees
+    // Sat/Val -> 0.0-1.0
+    let h_deg = (h / 255) * 360;
+    let s_norm = s / 255;
+    let v_norm = v / 255;
+
+    let c = v_norm * s_norm;
+    let x = c * (1 - Math.abs((h_deg / 60) % 2 - 1));
+    let m = v_norm - c;
     let r = 0, g = 0, b = 0;
 
-    if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
-    else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
-    else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
-    else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
-    else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-    else if (h >= 300 && h <= 360) { r = c; g = 0; b = x; }
+    if (h_deg >= 0 && h_deg < 60) { r = c; g = x; b = 0; }
+    else if (h_deg >= 60 && h_deg < 120) { r = x; g = c; b = 0; }
+    else if (h_deg >= 120 && h_deg < 180) { r = 0; g = c; b = x; }
+    else if (h_deg >= 180 && h_deg < 240) { r = 0; g = x; b = c; }
+    else if (h_deg >= 240 && h_deg < 300) { r = x; g = 0; b = c; }
+    else if (h_deg >= 300 && h_deg <= 360) { r = c; g = 0; b = x; }
 
     r = Math.round((r + m) * 255);
     g = Math.round((g + m) * 255);
