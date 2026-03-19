@@ -1,10 +1,73 @@
 const calendar = document.getElementById('calendar');
-const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const startHour = 8;
-const endHour = 20;
+const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const startHour = 0;
+const endHour = 24;
 
 // --- DATA LAYER ---
 let eventDatabase = {};
+
+// --- DYNAMIC SCALE UI ---
+const controlBar = document.createElement('div');
+controlBar.style.padding = '10px 20px';
+controlBar.style.display = 'flex';
+controlBar.style.alignItems = 'center';
+controlBar.style.gap = '15px';
+controlBar.style.fontFamily = 'sans-serif';
+controlBar.style.backgroundColor = '#f9f9f9';
+controlBar.style.borderBottom = '1px solid #ddd';
+
+const scaleLabel = document.createElement('label');
+scaleLabel.textContent = 'Vertical Scale (px/hour): ';
+scaleLabel.style.fontSize = '14px';
+scaleLabel.style.fontWeight = '500';
+
+const scaleSlider = document.createElement('input');
+scaleSlider.type = 'range';
+scaleSlider.min = '40';
+scaleSlider.max = '300';
+scaleSlider.value = '80'; // Default to 80px per hour
+scaleSlider.style.cursor = 'pointer';
+
+const scaleValueDisplay = document.createElement('span');
+scaleValueDisplay.textContent = scaleSlider.value;
+scaleValueDisplay.style.fontSize = '14px';
+scaleValueDisplay.style.fontFamily = 'monospace';
+scaleValueDisplay.style.width = '30px';
+
+controlBar.appendChild(scaleLabel);
+controlBar.appendChild(scaleSlider);
+controlBar.appendChild(scaleValueDisplay);
+
+// Insert control bar before the calendar in the DOM
+calendar.parentNode.insertBefore(controlBar, calendar);
+
+// Create a dynamic style tag to control element heights
+const dynamicStyle = document.createElement('style');
+document.head.appendChild(dynamicStyle);
+
+function updateScale(pixelsPerHour) {
+    scaleValueDisplay.textContent = pixelsPerHour;
+    const halfHourPx = pixelsPerHour / 2;
+
+    // 1. Force the CSS Grid to actually resize its row tracks
+    // Row 1 is 'auto' for the headers. The rest are set to our dynamic half-hour pixel size.
+    const numRows = (endHour - startHour) * 2;
+    calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${halfHourPx}px)`;
+
+    // 2. Ensure children lock to the new grid track sizes cleanly
+    dynamicStyle.textContent = `
+        .slot, .time-label {
+            height: ${halfHourPx}px !important;
+            min-height: ${halfHourPx}px !important;
+            max-height: ${halfHourPx}px !important;
+            box-sizing: border-box !important;
+        }
+    `;
+}
+
+// Listen to the slider
+scaleSlider.addEventListener('input', (e) => updateScale(e.target.value));
+
 
 // --- COLOR MATH HELPERS ---
 function clamp(val, min, max) {
@@ -24,9 +87,7 @@ function hsvToHex(h, s, v) {
     s = clamp(parseInt(s), 0, 255);
     v = clamp(parseInt(v), 0, 255);
 
-    // Convert to standard math formats for the conversion algorithm:
-    // Hue -> 0-360 degrees
-    // Sat/Val -> 0.0-1.0
+    // Convert to standard math formats
     let h_deg = (h / 255) * 360;
     let s_norm = s / 255;
     let v_norm = v / 255;
@@ -52,23 +113,16 @@ function hsvToHex(h, s, v) {
 
 function detectColorFromCommands(text) {
     const lines = text.split('\n');
-    // Search from bottom up so the last color command dictates the final block color
     for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i].trim();
 
-        // Match $led set_rgb rrr ggg bbb
         const rgbMatch = line.match(/\$led\s+set_rgb\s+(\d+)\s+(\d+)\s+(\d+)/i);
-        if (rgbMatch) {
-            return rgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
-        }
+        if (rgbMatch) return rgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
 
-        // Match $led set_hsv hhh sss vvv
         const hsvMatch = line.match(/\$led\s+set_hsv\s+(\d+)\s+(\d+)\s+(\d+)/i);
-        if (hsvMatch) {
-            return hsvToHex(hsvMatch[1], hsvMatch[2], hsvMatch[3]);
-        }
+        if (hsvMatch) return hsvToHex(hsvMatch[1], hsvMatch[2], hsvMatch[3]);
     }
-    return null; // No color command found
+    return null;
 }
 
 
@@ -115,6 +169,9 @@ function initCalendar() {
             }
         }
     }
+
+    // Initialize scale after the calendar DOM nodes exist
+    updateScale(scaleSlider.value);
 }
 
 initCalendar();
@@ -277,7 +334,6 @@ document.body.appendChild(modalOverlay);
 
 let modalCallback = null;
 
-// Listen for typing events to auto-update color picker
 modalTextarea.addEventListener('input', () => {
     const autoDetectedColor = detectColorFromCommands(modalTextarea.value);
     if (autoDetectedColor) {
@@ -289,7 +345,6 @@ function openModal(title, defaultText, defaultColor, callback) {
     modalTitle.textContent = title;
     modalTextarea.value = defaultText;
 
-    // Check if the default text already has a color command in it
     const preDetectedColor = detectColorFromCommands(defaultText);
     modalColorInput.value = preDetectedColor ? preDetectedColor : defaultColor;
 
@@ -470,7 +525,7 @@ window.addEventListener('pointerup', () => {
     if (currentDragSession.size > 0) {
         const savedSession = Array.from(currentDragSession);
 
-        openModal('Enter CLI Commands', 'npm run build', '#007aff', (cmdText, chosenColor) => {
+        openModal('Enter CLI Commands', '$led set_hsv 85 255 255', '#33ff33', (cmdText, chosenColor) => {
             if (cmdText !== null && cmdText.trim() !== "") {
                 const commandArray = cmdText.split('\n')
                     .map(cmd => cmd.trim())
@@ -498,7 +553,6 @@ window.addEventListener('pointerup', () => {
 
                 renderEventUI(uniqueEventId);
             } else {
-                // If they hit cancel, clean up the dragged blocks
                 savedSession.forEach(slot => {
                     slot.classList.remove('selected');
                     slot.style.backgroundColor = '';
