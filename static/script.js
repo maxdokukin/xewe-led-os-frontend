@@ -16,9 +16,9 @@ scaleLabel.className = 'scale-label';
 
 const scaleSlider = document.createElement('input');
 scaleSlider.type = 'range';
-scaleSlider.min = '20';
-scaleSlider.max = '200';
-scaleSlider.value = '40';
+scaleSlider.min = '29';
+scaleSlider.max = '50';
+scaleSlider.value = '29';
 scaleSlider.className = 'scale-slider';
 
 // Re-add the value display element
