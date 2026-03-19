@@ -342,3 +342,14 @@ h2 {
     pointer-events: none;
     display: none;
 }
+
+body.calendar-dragging .calendar-container,
+body.calendar-dragging .calendar-container * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+body.calendar-dragging {
+    cursor: crosshair;
+}
