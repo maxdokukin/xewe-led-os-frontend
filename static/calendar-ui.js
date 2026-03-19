@@ -2,41 +2,6 @@
     const app = window.CalendarApp;
     const { calendar, config, state, els, utils } = app;
 
-    function buildControlBar() {
-        const controlBar = document.createElement('div');
-        controlBar.className = 'control-bar';
-
-        const scaleLabel = document.createElement('label');
-        scaleLabel.textContent = 'Vertical Scale';
-        scaleLabel.className = 'scale-label';
-
-        const scaleSlider = document.createElement('input');
-        scaleSlider.type = 'range';
-        scaleSlider.min = '29';
-        scaleSlider.max = '50';
-        scaleSlider.value = '29';
-        scaleSlider.className = 'scale-slider';
-
-        const scaleValueDisplay = document.createElement('span');
-        scaleValueDisplay.textContent = scaleSlider.value;
-        scaleValueDisplay.className = 'scale-value';
-
-        controlBar.appendChild(scaleLabel);
-        controlBar.appendChild(scaleSlider);
-        controlBar.appendChild(scaleValueDisplay);
-
-        calendar.after(controlBar);
-
-        scaleSlider.addEventListener('input', (e) => {
-            updateScale(e.target.value);
-        });
-
-        els.controlBar = controlBar;
-        els.scaleLabel = scaleLabel;
-        els.scaleSlider = scaleSlider;
-        els.scaleValueDisplay = scaleValueDisplay;
-    }
-
     function buildDynamicStyle() {
         const dynamicStyle = document.createElement('style');
         document.head.appendChild(dynamicStyle);
@@ -193,7 +158,7 @@
             return;
         }
 
-        const pixelsPerHour = parseFloat(els.scaleSlider.value);
+        const pixelsPerHour = config.pixelsPerHour;
         const headerHeight = 60;
         const top = headerHeight + ((hours - config.startHour) + (minutes / 60)) * pixelsPerHour;
 
@@ -215,11 +180,10 @@
         }, 30000);
     }
 
-    function updateScale(pixelsPerHour) {
-        els.scaleValueDisplay.textContent = pixelsPerHour;
-
-        const quarterHourPx = pixelsPerHour / 4;
+    function applyFixedScale() {
+        const quarterHourPx = config.pixelsPerHour / 4;
         const numRows = utils.getTotalRows();
+
         calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${quarterHourPx}px) 0px`;
 
         els.dynamicStyle.textContent = `
@@ -341,13 +305,12 @@
         if (app.ui._initialized) return;
         app.ui._initialized = true;
 
-        buildControlBar();
         buildDynamicStyle();
         buildNowLine();
         buildModal();
         buildMenu();
         initCalendarGrid();
-        updateScale(els.scaleSlider.value);
+        applyFixedScale();
         startNowIndicator();
     }
 
@@ -356,6 +319,6 @@
     app.ui.closeModal = closeModal;
     app.ui.updateNowIndicator = updateNowIndicator;
     app.ui.startNowIndicator = startNowIndicator;
-    app.ui.updateScale = updateScale;
+    app.ui.applyFixedScale = applyFixedScale;
     app.ui.renderEventUI = renderEventUI;
 })();

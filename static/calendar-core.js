@@ -6,7 +6,8 @@
     app.config = {
         days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         startHour: 0,
-        endHour: 24
+        endHour: 24,
+        pixelsPerHour: 29
     };
 
     app.state = {
