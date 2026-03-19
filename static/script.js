@@ -1,7 +1,10 @@
 const calendar = document.getElementById('calendar');
 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const startHour = 8; // 8 AM
-const endHour = 20;  // 8 PM (12 hours total)
+const startHour = 8;
+const endHour = 20;
+
+// --- DATA LAYER ---
+let eventDatabase = {};
 
 // 1. Build the Grid
 function initCalendar() {
@@ -50,6 +53,134 @@ function initCalendar() {
 
 initCalendar();
 
+// --- UI HELPERS ---
+function renderEventUI(eventId) {
+    const event = eventDatabase[eventId];
+    if (!event) return;
+
+    const slots = document.querySelectorAll(`.slot[data-event-id="${eventId}"]`);
+    slots.forEach(s => s.innerHTML = '');
+
+    const slotsByDay = {};
+    event.slots.forEach(slotData => {
+        const domSlot = document.querySelector(`.slot[data-day="${slotData.day}"][data-time="${slotData.time}"]`);
+        if (domSlot) {
+            if (!slotsByDay[slotData.day]) slotsByDay[slotData.day] = [];
+            slotsByDay[slotData.day].push(domSlot);
+        }
+    });
+
+    const mainCmd = event.commands[0] || "Empty Script";
+    const extraCount = event.commands.length - 1;
+    const displayText = extraCount > 0 ? `> ${mainCmd} <span style="color:var(--text-muted); font-size:10px;">(+${extraCount})</span>` : `> ${mainCmd}`;
+
+    for (const day in slotsByDay) {
+        const daySlots = slotsByDay[day];
+        daySlots.sort((a, b) => {
+            const timeA = a.dataset.time.split(':').map(Number);
+            const timeB = b.dataset.time.split(':').map(Number);
+            return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+        });
+        if (daySlots[0]) {
+            daySlots[0].innerHTML = `<span class="slot-text" style="font-family: monospace;">${displayText}</span>`;
+        }
+    }
+}
+
+// --- MODAL UI (Text Area Pop-up) ---
+const modalOverlay = document.createElement('div');
+modalOverlay.style.position = 'fixed';
+modalOverlay.style.top = '0';
+modalOverlay.style.left = '0';
+modalOverlay.style.width = '100vw';
+modalOverlay.style.height = '100vh';
+modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.4)';
+modalOverlay.style.display = 'none';
+modalOverlay.style.justifyContent = 'center';
+modalOverlay.style.alignItems = 'center';
+modalOverlay.style.zIndex = '2000';
+
+const modalBox = document.createElement('div');
+modalBox.style.backgroundColor = '#fff';
+modalBox.style.padding = '20px';
+modalBox.style.borderRadius = '12px';
+modalBox.style.width = '400px';
+modalBox.style.maxWidth = '90%';
+modalBox.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+modalBox.style.display = 'flex';
+modalBox.style.flexDirection = 'column';
+modalBox.style.gap = '15px';
+
+const modalTitle = document.createElement('h3');
+modalTitle.style.margin = '0';
+modalTitle.style.fontSize = '18px';
+
+const modalTextarea = document.createElement('textarea');
+modalTextarea.rows = 6;
+modalTextarea.style.width = '100%';
+modalTextarea.style.padding = '10px';
+modalTextarea.style.borderRadius = '8px';
+modalTextarea.style.border = '1px solid #ccc';
+modalTextarea.style.fontFamily = 'monospace';
+modalTextarea.style.fontSize = '14px';
+modalTextarea.style.resize = 'vertical';
+
+const modalBtnContainer = document.createElement('div');
+modalBtnContainer.style.display = 'flex';
+modalBtnContainer.style.justifyContent = 'flex-end';
+modalBtnContainer.style.gap = '10px';
+
+const cancelModalBtn = document.createElement('button');
+cancelModalBtn.textContent = 'Cancel';
+cancelModalBtn.style.padding = '8px 16px';
+cancelModalBtn.style.border = 'none';
+cancelModalBtn.style.background = '#f2f2f7';
+cancelModalBtn.style.borderRadius = '6px';
+cancelModalBtn.style.cursor = 'pointer';
+
+const saveModalBtn = document.createElement('button');
+saveModalBtn.textContent = 'Save';
+saveModalBtn.style.padding = '8px 16px';
+saveModalBtn.style.border = 'none';
+saveModalBtn.style.background = '#007aff';
+saveModalBtn.style.color = '#fff';
+saveModalBtn.style.borderRadius = '6px';
+saveModalBtn.style.cursor = 'pointer';
+
+modalBtnContainer.appendChild(cancelModalBtn);
+modalBtnContainer.appendChild(saveModalBtn);
+modalBox.appendChild(modalTitle);
+modalBox.appendChild(modalTextarea);
+modalBox.appendChild(modalBtnContainer);
+modalOverlay.appendChild(modalBox);
+document.body.appendChild(modalOverlay);
+
+let modalCallback = null;
+
+function openModal(title, defaultText, callback) {
+    modalTitle.textContent = title;
+    modalTextarea.value = defaultText;
+    modalCallback = callback;
+    modalOverlay.style.display = 'flex';
+    modalTextarea.focus();
+}
+
+function closeModal() {
+    modalOverlay.style.display = 'none';
+    modalCallback = null;
+}
+
+cancelModalBtn.onclick = () => {
+    if (modalCallback) modalCallback(null);
+    closeModal();
+};
+
+saveModalBtn.onclick = () => {
+    if (modalCallback) modalCallback(modalTextarea.value);
+    closeModal();
+};
+
+
 // 2. Build the Edit/Delete Menu UI
 const menu = document.createElement('div');
 menu.style.position = 'absolute';
@@ -62,20 +193,20 @@ menu.style.padding = '6px';
 menu.style.zIndex = '1000';
 menu.style.flexDirection = 'column';
 menu.style.gap = '2px';
-menu.style.minWidth = '120px';
+menu.style.minWidth = '140px';
 
-const editBtn = document.createElement('button');
-editBtn.textContent = 'Edit Name';
-editBtn.style.padding = '8px 12px';
-editBtn.style.border = 'none';
-editBtn.style.background = 'transparent';
-editBtn.style.cursor = 'pointer';
-editBtn.style.textAlign = 'left';
-editBtn.style.borderRadius = '6px';
-editBtn.style.fontSize = '14px';
+const editCmdBtn = document.createElement('button');
+editCmdBtn.textContent = 'Edit Commands';
+editCmdBtn.style.padding = '8px 12px';
+editCmdBtn.style.border = 'none';
+editCmdBtn.style.background = 'transparent';
+editCmdBtn.style.cursor = 'pointer';
+editCmdBtn.style.textAlign = 'left';
+editCmdBtn.style.borderRadius = '6px';
+editCmdBtn.style.fontSize = '14px';
 
 const deleteBtn = document.createElement('button');
-deleteBtn.textContent = 'Delete Event';
+deleteBtn.textContent = 'Delete Block';
 deleteBtn.style.padding = '8px 12px';
 deleteBtn.style.border = 'none';
 deleteBtn.style.background = 'transparent';
@@ -85,71 +216,63 @@ deleteBtn.style.textAlign = 'left';
 deleteBtn.style.borderRadius = '6px';
 deleteBtn.style.fontSize = '14px';
 
-[editBtn, deleteBtn].forEach(btn => {
+[editCmdBtn, deleteBtn].forEach(btn => {
     btn.onmouseover = () => btn.style.backgroundColor = '#f2f2f7';
     btn.onmouseout = () => btn.style.backgroundColor = 'transparent';
 });
 
-menu.appendChild(editBtn);
+menu.appendChild(editCmdBtn);
 menu.appendChild(deleteBtn);
 document.body.appendChild(menu);
 
-let activeEventGroup = [];
+let activeEventId = null;
 
 function hideMenu() {
     menu.style.display = 'none';
-    activeEventGroup = [];
+    activeEventId = null;
 }
 
 document.addEventListener('pointerdown', (e) => {
-    if (!menu.contains(e.target) && (!e.target.classList || !e.target.classList.contains('selected'))) {
+    if (!menu.contains(e.target) && !modalOverlay.contains(e.target) && (!e.target.classList || !e.target.classList.contains('selected'))) {
         hideMenu();
     }
 });
 
-// Edit Button Logic (Updated to handle ID groupings)
-editBtn.addEventListener('click', () => {
-    if (activeEventGroup.length > 0) {
-        // Find the current text to show in the prompt
-        let currentText = 'New Event';
-        const slotWithText = activeEventGroup.find(s => s.textContent.trim() !== '');
-        if (slotWithText) currentText = slotWithText.textContent.trim();
+// Edit Existing Commands Logic (Using Modal)
+editCmdBtn.addEventListener('click', () => {
+    if (activeEventId && eventDatabase[activeEventId]) {
+        const currentCmds = eventDatabase[activeEventId].commands.join('\n');
 
-        const newName = prompt('Edit event name:', currentText);
+        openModal('Edit Commands', currentCmds, (editedCmds) => {
+            if (editedCmds !== null) {
+                const newCommandArray = editedCmds.split('\n')
+                    .map(cmd => cmd.trim())
+                    .filter(cmd => cmd !== "");
 
-        if (newName !== null && newName.trim() !== "") {
-            // Clear old text from all slots in this specific event
-            activeEventGroup.forEach(slot => slot.innerHTML = '');
-
-            // Regroup by day and apply new text to the top of each column
-            const slotsByDay = {};
-            activeEventGroup.forEach(slot => {
-                const day = slot.dataset.day;
-                if (!slotsByDay[day]) slotsByDay[day] = [];
-                slotsByDay[day].push(slot);
-            });
-
-            for (const day in slotsByDay) {
-                const daySlots = slotsByDay[day];
-                daySlots.sort((a, b) => {
-                    const timeA = a.dataset.time.split(':').map(Number);
-                    const timeB = b.dataset.time.split(':').map(Number);
-                    return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-                });
-                daySlots[0].innerHTML = `<span class="slot-text">${newName}</span>`;
+                // If they cleared all text, you could optionally delete the event,
+                // but let's just save an empty array or fallback to "Empty Script"
+                eventDatabase[activeEventId].commands = newCommandArray;
+                renderEventUI(activeEventId);
+                console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
             }
-        }
+        });
     }
     hideMenu();
 });
 
-// Delete Button Logic (Updated to only delete the specific ID)
+// Delete Button Logic
 deleteBtn.addEventListener('click', () => {
-    activeEventGroup.forEach(slot => {
-        slot.classList.remove('selected');
-        slot.innerHTML = '';
-        delete slot.dataset.eventId; // Remove the unique ID
-    });
+    if (activeEventId) {
+        const slots = document.querySelectorAll(`.slot[data-event-id="${activeEventId}"]`);
+        slots.forEach(slot => {
+            slot.classList.remove('selected');
+            slot.innerHTML = '';
+            delete slot.dataset.eventId;
+        });
+
+        delete eventDatabase[activeEventId];
+        console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
+    }
     hideMenu();
 });
 
@@ -168,32 +291,22 @@ function toggleSlot(slot) {
 }
 
 calendar.addEventListener('pointerdown', (e) => {
+    if (modalOverlay.style.display === 'flex') return; // Don't drag if modal is open
+
     const slot = e.target.closest('.slot');
     if (!slot) return;
 
-    // IF CLICKING AN EXISTING EVENT: Show Menu
     if (slot.classList.contains('selected')) {
         isDragging = false;
-
-        // Grab the unique ID of the event we clicked
-        const eventId = slot.dataset.eventId;
-
-        // Find ALL slots on the calendar that share this exact ID
-        if (eventId) {
-            activeEventGroup = Array.from(document.querySelectorAll(`.slot[data-event-id="${eventId}"]`));
-        } else {
-            // Fallback just in case
-            activeEventGroup = [slot];
-        }
+        activeEventId = slot.dataset.eventId;
 
         menu.style.display = 'flex';
-        const menuX = Math.min(e.clientX + 10, window.innerWidth - 130);
+        const menuX = Math.min(e.clientX + 10, window.innerWidth - 150);
         menu.style.left = `${menuX}px`;
         menu.style.top = `${e.clientY + 10}px`;
         return;
     }
 
-    // IF CLICKING EMPTY SPACE: Start dragging
     hideMenu();
     isDragging = true;
     currentDragSession.clear();
@@ -220,36 +333,37 @@ window.addEventListener('pointerup', () => {
     if (currentDragSession.size > 0) {
         const savedSession = Array.from(currentDragSession);
 
-        setTimeout(() => {
-            const eventText = prompt("Enter event name:", "New Event");
-            if (eventText) {
-                // Generate a unique ID for this specific event creation
+        openModal('Enter CLI Commands', 'npm run build\npm2 restart all', (cmdText) => {
+            if (cmdText && cmdText.trim() !== "") {
+                const commandArray = cmdText.split('\n')
+                    .map(cmd => cmd.trim())
+                    .filter(cmd => cmd !== "");
+
                 const uniqueEventId = 'evt-' + Date.now();
 
-                const slotsByDay = {};
-                savedSession.forEach(slot => {
-                    // Tag every slot with the unique ID
-                    slot.dataset.eventId = uniqueEventId;
+                const newRecord = {
+                    id: uniqueEventId,
+                    commands: commandArray,
+                    slots: []
+                };
 
-                    const day = slot.dataset.day;
-                    if (!slotsByDay[day]) slotsByDay[day] = [];
-                    slotsByDay[day].push(slot);
+                savedSession.forEach(slot => {
+                    slot.dataset.eventId = uniqueEventId;
+                    newRecord.slots.push({
+                        day: slot.dataset.day,
+                        time: slot.dataset.time
+                    });
                 });
 
-                for (const day in slotsByDay) {
-                    const daySlots = slotsByDay[day];
-                    daySlots.sort((a, b) => {
-                        const timeA = a.dataset.time.split(':').map(Number);
-                        const timeB = b.dataset.time.split(':').map(Number);
-                        return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-                    });
-                    const topSlot = daySlots[0];
-                    topSlot.innerHTML = `<span class="slot-text">${eventText}</span>`;
-                }
+                eventDatabase[uniqueEventId] = newRecord;
+                console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
+
+                renderEventUI(uniqueEventId);
             } else {
+                // If cancelled or empty, revert the blocks
                 savedSession.forEach(slot => slot.classList.remove('selected'));
             }
-        }, 10);
+        });
     }
 
     currentDragSession.clear();
