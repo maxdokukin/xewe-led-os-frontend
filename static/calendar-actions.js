@@ -53,7 +53,8 @@
 
         clearEventSlots(eventId);
         delete state.eventDatabase[eventId];
-        console.log("Updated Database:", JSON.stringify(state.eventDatabase, null, 2));
+
+        deleteEventFromServer(eventId);
     }
 
     function editEvent(eventId) {
@@ -74,7 +75,7 @@
                 state.eventDatabase[eventId].color = newColor;
                 app.ui.renderEventUI(eventId);
 
-                console.log("Updated Database:", JSON.stringify(state.eventDatabase, null, 2));
+                syncEventToServer(eventId);
             }
         });
     }
@@ -100,8 +101,9 @@
         });
 
         state.eventDatabase[uniqueEventId] = newRecord;
-        console.log("Updated Database:", JSON.stringify(state.eventDatabase, null, 2));
         app.ui.renderEventUI(uniqueEventId);
+
+        syncEventToServer(uniqueEventId);
 
         return uniqueEventId;
     }
@@ -181,9 +183,67 @@
 
         state.eventDatabase[uniqueEventId] = newRecord;
         app.ui.renderEventUI(uniqueEventId);
-        console.log("Updated Database:", JSON.stringify(state.eventDatabase, null, 2));
+
+        syncEventToServer(uniqueEventId);
 
         return true;
+    }
+
+    // --- SINGLE EVENT SYNC LOGIC ---
+    async function syncEventToServer(eventId) {
+        const evt = state.eventDatabase[eventId];
+        if (!evt || !evt.slots || evt.slots.length === 0) return;
+
+        const timesInMinutes = evt.slots.map(s => {
+            const [h, m] = s.time.split(':').map(Number);
+            return (h * 60) + m;
+        });
+
+        const startTime = Math.min(...timesInMinutes);
+        const endTime = Math.max(...timesInMinutes) + 15;
+        const day = evt.slots[0].day;
+
+        const formattedCommands = [evt.commands.map(cmd => `"${cmd}"`).join(' ')];
+
+        const payload = {
+            id: eventId.toString(),
+            commands: formattedCommands,
+            color: evt.color,
+            day: day,
+            start_time: startTime,
+            end_time: endTime
+        };
+
+        try {
+            const response = await fetch('/schedule/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            // RELOAD UPON SUCCESS
+            window.location.reload();
+
+        } catch (error) {
+            console.error("Failed to sync event to backend:", error);
+        }
+    }
+
+    async function deleteEventFromServer(eventId) {
+        try {
+            const response = await fetch('/schedule/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: eventId.toString() })
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            console.log(`Successfully deleted event ${eventId} from backend.`);
+        } catch (error) {
+            console.error("Failed to delete event from backend:", error);
+        }
     }
 
     async function fetchAndLoadSchedules() {
@@ -203,19 +263,15 @@
                 const slotsArray = [];
                 const eventId = evt.id.toString();
 
-                // --- NEW LOGIC: Parse commands cleanly ---
                 let cleanCommands = [];
                 if (Array.isArray(evt.commands)) {
                     evt.commands.forEach(cmdStr => {
-                        // Extract anything between double quotes
                         const matches = cmdStr.match(/"([^"]+)"/g);
                         if (matches) {
-                            // Strip out the quotes and push them individually
                             matches.forEach(m => {
                                 cleanCommands.push(m.replace(/"/g, ''));
                             });
                         } else {
-                            // Fallback just in case they aren't quoted
                             cleanCommands.push(cmdStr);
                         }
                     });
@@ -239,7 +295,7 @@
 
                 state.eventDatabase[eventId] = {
                     id: eventId,
-                    commands: cleanCommands, // Passing the cleaned array here!
+                    commands: cleanCommands,
                     color: evt.color || '#33ff33',
                     slots: slotsArray
                 };
@@ -248,7 +304,6 @@
             for (const id in state.eventDatabase) {
                 app.ui.renderEventUI(id);
             }
-            console.log("Loaded Database from Server:", state.eventDatabase);
 
         } catch (error) {
             console.error("Failed to load schedules from server:", error);
@@ -307,6 +362,8 @@
     app.actions.copyEventToClipboard = copyEventToClipboard;
     app.actions.canPasteBlockAt = canPasteBlockAt;
     app.actions.pasteCopiedBlockAt = pasteCopiedBlockAt;
+    app.actions.syncEventToServer = syncEventToServer;
+    app.actions.deleteEventFromServer = deleteEventFromServer;
     app.actions.bindMenuActions = bindMenuActions;
     app.actions.fetchAndLoadSchedules = fetchAndLoadSchedules;
 })();
