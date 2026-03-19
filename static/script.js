@@ -49,14 +49,14 @@ function detectColorFromCommands(text) {
     for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i].trim();
 
-        // Match $set_rgb rrr ggg bbb
-        const rgbMatch = line.match(/\$set_rgb\s+(\d+)\s+(\d+)\s+(\d+)/i);
+        // Match $led set_rgb rrr ggg bbb
+        const rgbMatch = line.match(/\$led\s+set_rgb\s+(\d+)\s+(\d+)\s+(\d+)/i);
         if (rgbMatch) {
             return rgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
         }
 
-        // Match $set_hsv hhh sss vvv
-        const hsvMatch = line.match(/\$set_hsv\s+(\d+)\s+(\d+)\s+(\d+)/i);
+        // Match $led set_hsv hhh sss vvv
+        const hsvMatch = line.match(/\$led\s+set_hsv\s+(\d+)\s+(\d+)\s+(\d+)/i);
         if (hsvMatch) {
             return hsvToHex(hsvMatch[1], hsvMatch[2], hsvMatch[3]);
         }
@@ -225,7 +225,7 @@ colorLabel.style.fontWeight = '500';
 
 const modalColorInput = document.createElement('input');
 modalColorInput.type = 'color';
-modalColorInput.style.border = 'none';
+modalColorInput.style.border = '1px solid #ccc';
 modalColorInput.style.width = '36px';
 modalColorInput.style.height = '36px';
 modalColorInput.style.padding = '0';
@@ -491,6 +491,7 @@ window.addEventListener('pointerup', () => {
 
                 renderEventUI(uniqueEventId);
             } else {
+                // If they hit cancel, clean up the dragged blocks
                 savedSession.forEach(slot => {
                     slot.classList.remove('selected');
                     slot.style.backgroundColor = '';
