@@ -59,7 +59,12 @@ function renderEventUI(eventId) {
     if (!event) return;
 
     const slots = document.querySelectorAll(`.slot[data-event-id="${eventId}"]`);
-    slots.forEach(s => s.innerHTML = '');
+    slots.forEach(s => {
+        s.innerHTML = '';
+        // Apply the saved color to the slot's background
+        s.style.backgroundColor = event.color || '#007aff';
+        s.style.borderBottom = '1px solid rgba(255,255,255,0.2)'; // Nice visual separation
+    });
 
     const slotsByDay = {};
     event.slots.forEach(slotData => {
@@ -100,7 +105,8 @@ function renderEventUI(eventId) {
                     box-sizing: border-box;
                     pointer-events: none;
                     line-height: 1.5;
-                    color: inherit;
+                    color: #ffffff;
+                    text-shadow: 0px 1px 3px rgba(0,0,0,0.4);
                     z-index: 10;
                 ">
                     ${allCmdsHTML}
@@ -149,6 +155,30 @@ modalTextarea.style.fontSize = '14px';
 modalTextarea.style.resize = 'vertical';
 modalTextarea.style.boxSizing = 'border-box';
 
+// Color Picker Container
+const colorContainer = document.createElement('div');
+colorContainer.style.display = 'flex';
+colorContainer.style.alignItems = 'center';
+colorContainer.style.gap = '10px';
+
+const colorLabel = document.createElement('span');
+colorLabel.textContent = 'Block Color:';
+colorLabel.style.fontSize = '14px';
+colorLabel.style.fontWeight = '500';
+
+const modalColorInput = document.createElement('input');
+modalColorInput.type = 'color';
+modalColorInput.style.border = 'none';
+modalColorInput.style.width = '36px';
+modalColorInput.style.height = '36px';
+modalColorInput.style.padding = '0';
+modalColorInput.style.borderRadius = '6px';
+modalColorInput.style.cursor = 'pointer';
+modalColorInput.style.backgroundColor = 'transparent';
+
+colorContainer.appendChild(colorLabel);
+colorContainer.appendChild(modalColorInput);
+
 const modalBtnContainer = document.createElement('div');
 modalBtnContainer.style.display = 'flex';
 modalBtnContainer.style.justifyContent = 'flex-end';
@@ -173,17 +203,21 @@ saveModalBtn.style.cursor = 'pointer';
 
 modalBtnContainer.appendChild(cancelModalBtn);
 modalBtnContainer.appendChild(saveModalBtn);
+
 modalBox.appendChild(modalTitle);
 modalBox.appendChild(modalTextarea);
+modalBox.appendChild(colorContainer); // Inject color picker
 modalBox.appendChild(modalBtnContainer);
 modalOverlay.appendChild(modalBox);
 document.body.appendChild(modalOverlay);
 
 let modalCallback = null;
 
-function openModal(title, defaultText, callback) {
+// Updated to accept defaultColor
+function openModal(title, defaultText, defaultColor, callback) {
     modalTitle.textContent = title;
     modalTextarea.value = defaultText;
+    modalColorInput.value = defaultColor;
     modalCallback = callback;
     modalOverlay.style.display = 'flex';
     modalTextarea.focus();
@@ -195,12 +229,13 @@ function closeModal() {
 }
 
 cancelModalBtn.onclick = () => {
-    if (modalCallback) modalCallback(null);
+    if (modalCallback) modalCallback(null, null);
     closeModal();
 };
 
 saveModalBtn.onclick = () => {
-    if (modalCallback) modalCallback(modalTextarea.value);
+    // Pass back both the text and the color
+    if (modalCallback) modalCallback(modalTextarea.value, modalColorInput.value);
     closeModal();
 };
 
@@ -220,7 +255,7 @@ menu.style.gap = '2px';
 menu.style.minWidth = '140px';
 
 const editCmdBtn = document.createElement('button');
-editCmdBtn.textContent = 'Edit Commands';
+editCmdBtn.textContent = 'Edit Commands / Color';
 editCmdBtn.style.padding = '8px 12px';
 editCmdBtn.style.border = 'none';
 editCmdBtn.style.background = 'transparent';
@@ -262,29 +297,30 @@ document.addEventListener('pointerdown', (e) => {
     }
 });
 
-// Edit Existing Commands Logic (BUG FIXED HERE)
+// Edit Logic
 editCmdBtn.addEventListener('click', () => {
     if (activeEventId && eventDatabase[activeEventId]) {
-        // We MUST save the ID to a local variable before hideMenu() wipes it out
         const currentEventId = activeEventId;
         const currentCmds = eventDatabase[currentEventId].commands.join('\n');
+        const currentColor = eventDatabase[currentEventId].color || '#007aff';
 
-        openModal('Edit Commands', currentCmds, (editedCmds) => {
+        openModal('Edit Block', currentCmds, currentColor, (editedCmds, newColor) => {
             if (editedCmds !== null) {
                 const newCommandArray = editedCmds.split('\n')
                     .map(cmd => cmd.trim())
                     .filter(cmd => cmd !== "");
 
                 eventDatabase[currentEventId].commands = newCommandArray;
+                eventDatabase[currentEventId].color = newColor; // Save new color
                 renderEventUI(currentEventId);
                 console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
             }
         });
     }
-    hideMenu(); // This wipes activeEventId, but our callback uses currentEventId now!
+    hideMenu();
 });
 
-// Delete Button Logic
+// Delete Logic
 deleteBtn.addEventListener('click', () => {
     if (activeEventId) {
         const currentEventId = activeEventId;
@@ -292,6 +328,8 @@ deleteBtn.addEventListener('click', () => {
         slots.forEach(slot => {
             slot.classList.remove('selected');
             slot.innerHTML = '';
+            slot.style.backgroundColor = ''; // Clear color
+            slot.style.borderBottom = '';
             delete slot.dataset.eventId;
         });
 
@@ -358,8 +396,9 @@ window.addEventListener('pointerup', () => {
     if (currentDragSession.size > 0) {
         const savedSession = Array.from(currentDragSession);
 
-        openModal('Enter CLI Commands', 'npm run build\npm2 restart all', (cmdText) => {
-            if (cmdText && cmdText.trim() !== "") {
+        // Default to a nice blue on creation
+        openModal('Enter CLI Commands', 'npm run build', '#007aff', (cmdText, chosenColor) => {
+            if (cmdText !== null && cmdText.trim() !== "") {
                 const commandArray = cmdText.split('\n')
                     .map(cmd => cmd.trim())
                     .filter(cmd => cmd !== "");
@@ -369,6 +408,7 @@ window.addEventListener('pointerup', () => {
                 const newRecord = {
                     id: uniqueEventId,
                     commands: commandArray,
+                    color: chosenColor, // Save to JSON
                     slots: []
                 };
 
@@ -385,7 +425,11 @@ window.addEventListener('pointerup', () => {
 
                 renderEventUI(uniqueEventId);
             } else {
-                savedSession.forEach(slot => slot.classList.remove('selected'));
+                // If they hit cancel, clean up the dragged blocks
+                savedSession.forEach(slot => {
+                    slot.classList.remove('selected');
+                    slot.style.backgroundColor = '';
+                });
             }
         });
     }
