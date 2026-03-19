@@ -211,6 +211,18 @@
     app.interactions.updateDragSelection = updateDragSelection;
     app.interactions.bind = bind;
 
+    // --- NEW: Midnight Rollover Tracker ---
+    const loadedDate = new Date().toDateString();
+
+    setInterval(() => {
+        // Checks every 60 seconds if the current day has changed from the day the page loaded
+        if (new Date().toDateString() !== loadedDate) {
+            console.log("Midnight passed! Reloading UI to update the day highlights...");
+            window.location.reload();
+        }
+    }, 60000);
+
+    // Initialize all components
     app.ui.init();
     app.actions.bindMenuActions();
     app.interactions.bind();
