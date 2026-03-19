@@ -1,3 +1,5 @@
+// calendar-interactions.js
+
 (function () {
     const app = window.CalendarApp;
     const { calendar, state } = app;

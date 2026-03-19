@@ -1,3 +1,5 @@
+// calendar-core.js
+
 (function () {
     const app = window.CalendarApp = window.CalendarApp || {};
 
