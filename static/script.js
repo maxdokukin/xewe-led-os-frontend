@@ -50,9 +50,9 @@ function updateScale(pixelsPerHour) {
     const quarterHourPx = pixelsPerHour / 4;
 
     const numRows = (endHour - startHour) * 4;
-    calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${quarterHourPx}px)`;
+    // Add an extra 0px row at the very end to hold the final 12 AM closing line
+    calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${quarterHourPx}px) 0px`;
 
-    // Added visual tweaks: thicker hour lines and header margin
     dynamicStyle.textContent = `
         .slot, .time-label {
             height: ${quarterHourPx}px !important;
@@ -61,10 +61,22 @@ function updateScale(pixelsPerHour) {
             box-sizing: border-box !important;
         }
         .hour-marker {
-            border-top: 2px solid #999 !important; /* Thicker line for full hours */
+            border-top: 2px solid #999 !important; 
         }
         .day-header, .header-corner {
-            margin-bottom: 8px !important; /* Gap between header and grid */
+            margin-bottom: 8px !important; 
+        }
+        /* Styles to snap the final line cleanly at the bottom */
+        .end-marker {
+            height: 0px !important;
+            min-height: 0px !important;
+            max-height: 0px !important;
+            border-bottom: none !important;
+            overflow: visible !important;
+            pointer-events: none !important;
+        }
+        .end-marker span {
+            display: inline-block;
         }
     `;
 }
@@ -157,7 +169,6 @@ function initCalendar() {
             const timeLabel = document.createElement('div');
             timeLabel.className = 'time-label';
 
-            // Add the heavy top border to the top of the hour
             if (qtr === 0) {
                 timeLabel.classList.add('hour-marker');
                 const ampm = h >= 12 ? 'PM' : 'AM';
@@ -171,7 +182,6 @@ function initCalendar() {
                 slot.className = 'slot';
                 slot.dataset.day = d;
 
-                // Add the heavy top border to the top of the hour slots
                 if (qtr === 0) {
                     slot.classList.add('hour-marker');
                 }
@@ -182,6 +192,19 @@ function initCalendar() {
             }
         }
     }
+
+    // --- NEW: Add the final 12 AM closing line ---
+    const endLabel = document.createElement('div');
+    endLabel.className = 'time-label hour-marker end-marker';
+    endLabel.innerHTML = `<span>12 AM</span>`;
+    calendar.appendChild(endLabel);
+
+    for (let d = 0; d < 7; d++) {
+        const endSlot = document.createElement('div');
+        endSlot.className = 'slot hour-marker end-marker';
+        calendar.appendChild(endSlot);
+    }
+    // ---------------------------------------------
 
     updateScale(scaleSlider.value);
 }
