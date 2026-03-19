@@ -6,6 +6,65 @@ const endHour = 20;
 // --- DATA LAYER ---
 let eventDatabase = {};
 
+// --- COLOR MATH HELPERS ---
+function clamp(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+}
+
+function rgbToHex(r, g, b) {
+    r = clamp(parseInt(r), 0, 255);
+    g = clamp(parseInt(g), 0, 255);
+    b = clamp(parseInt(b), 0, 255);
+    return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase();
+}
+
+function hsvToHex(h, s, v) {
+    // Assumes standard ranges: H[0-360], S[0-100], V[0-100]
+    h = clamp(parseInt(h), 0, 360);
+    s = clamp(parseInt(s), 0, 100) / 100;
+    v = clamp(parseInt(v), 0, 100) / 100;
+
+    let c = v * s;
+    let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    let m = v - c;
+    let r = 0, g = 0, b = 0;
+
+    if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+    else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+    else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+    else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+    else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+    else if (h >= 300 && h <= 360) { r = c; g = 0; b = x; }
+
+    r = Math.round((r + m) * 255);
+    g = Math.round((g + m) * 255);
+    b = Math.round((b + m) * 255);
+
+    return rgbToHex(r, g, b);
+}
+
+function detectColorFromCommands(text) {
+    const lines = text.split('\n');
+    // Search from bottom up so the last color command dictates the final block color
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+
+        // Match $set_rgb rrr ggg bbb
+        const rgbMatch = line.match(/\$set_rgb\s+(\d+)\s+(\d+)\s+(\d+)/i);
+        if (rgbMatch) {
+            return rgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
+        }
+
+        // Match $set_hsv hhh sss vvv
+        const hsvMatch = line.match(/\$set_hsv\s+(\d+)\s+(\d+)\s+(\d+)/i);
+        if (hsvMatch) {
+            return hsvToHex(hsvMatch[1], hsvMatch[2], hsvMatch[3]);
+        }
+    }
+    return null; // No color command found
+}
+
+
 // 1. Build the Grid
 function initCalendar() {
     const corner = document.createElement('div');
@@ -61,9 +120,8 @@ function renderEventUI(eventId) {
     const slots = document.querySelectorAll(`.slot[data-event-id="${eventId}"]`);
     slots.forEach(s => {
         s.innerHTML = '';
-        // Apply the saved color to the slot's background
         s.style.backgroundColor = event.color || '#007aff';
-        s.style.borderBottom = '1px solid rgba(255,255,255,0.2)'; // Nice visual separation
+        s.style.borderBottom = '1px solid rgba(255,255,255,0.2)';
     });
 
     const slotsByDay = {};
@@ -155,7 +213,6 @@ modalTextarea.style.fontSize = '14px';
 modalTextarea.style.resize = 'vertical';
 modalTextarea.style.boxSizing = 'border-box';
 
-// Color Picker Container
 const colorContainer = document.createElement('div');
 colorContainer.style.display = 'flex';
 colorContainer.style.alignItems = 'center';
@@ -206,18 +263,29 @@ modalBtnContainer.appendChild(saveModalBtn);
 
 modalBox.appendChild(modalTitle);
 modalBox.appendChild(modalTextarea);
-modalBox.appendChild(colorContainer); // Inject color picker
+modalBox.appendChild(colorContainer);
 modalBox.appendChild(modalBtnContainer);
 modalOverlay.appendChild(modalBox);
 document.body.appendChild(modalOverlay);
 
 let modalCallback = null;
 
-// Updated to accept defaultColor
+// Listen for typing events to auto-update color picker
+modalTextarea.addEventListener('input', () => {
+    const autoDetectedColor = detectColorFromCommands(modalTextarea.value);
+    if (autoDetectedColor) {
+        modalColorInput.value = autoDetectedColor;
+    }
+});
+
 function openModal(title, defaultText, defaultColor, callback) {
     modalTitle.textContent = title;
     modalTextarea.value = defaultText;
-    modalColorInput.value = defaultColor;
+
+    // Check if the default text already has a color command in it
+    const preDetectedColor = detectColorFromCommands(defaultText);
+    modalColorInput.value = preDetectedColor ? preDetectedColor : defaultColor;
+
     modalCallback = callback;
     modalOverlay.style.display = 'flex';
     modalTextarea.focus();
@@ -234,7 +302,6 @@ cancelModalBtn.onclick = () => {
 };
 
 saveModalBtn.onclick = () => {
-    // Pass back both the text and the color
     if (modalCallback) modalCallback(modalTextarea.value, modalColorInput.value);
     closeModal();
 };
@@ -311,7 +378,7 @@ editCmdBtn.addEventListener('click', () => {
                     .filter(cmd => cmd !== "");
 
                 eventDatabase[currentEventId].commands = newCommandArray;
-                eventDatabase[currentEventId].color = newColor; // Save new color
+                eventDatabase[currentEventId].color = newColor;
                 renderEventUI(currentEventId);
                 console.log("Updated Database:", JSON.stringify(eventDatabase, null, 2));
             }
@@ -328,7 +395,7 @@ deleteBtn.addEventListener('click', () => {
         slots.forEach(slot => {
             slot.classList.remove('selected');
             slot.innerHTML = '';
-            slot.style.backgroundColor = ''; // Clear color
+            slot.style.backgroundColor = '';
             slot.style.borderBottom = '';
             delete slot.dataset.eventId;
         });
@@ -396,7 +463,6 @@ window.addEventListener('pointerup', () => {
     if (currentDragSession.size > 0) {
         const savedSession = Array.from(currentDragSession);
 
-        // Default to a nice blue on creation
         openModal('Enter CLI Commands', 'npm run build', '#007aff', (cmdText, chosenColor) => {
             if (cmdText !== null && cmdText.trim() !== "") {
                 const commandArray = cmdText.split('\n')
@@ -408,7 +474,7 @@ window.addEventListener('pointerup', () => {
                 const newRecord = {
                     id: uniqueEventId,
                     commands: commandArray,
-                    color: chosenColor, // Save to JSON
+                    color: chosenColor,
                     slots: []
                 };
 
@@ -425,7 +491,6 @@ window.addEventListener('pointerup', () => {
 
                 renderEventUI(uniqueEventId);
             } else {
-                // If they hit cancel, clean up the dragged blocks
                 savedSession.forEach(slot => {
                     slot.classList.remove('selected');
                     slot.style.backgroundColor = '';
