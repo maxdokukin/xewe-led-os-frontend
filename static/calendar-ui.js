@@ -2,6 +2,30 @@
     const app = window.CalendarApp;
     const { calendar, config, state, els, utils } = app;
 
+    function buildCalendarShell() {
+        if (els.calendarShell) return;
+
+        const shell = document.createElement('div');
+        shell.className = 'calendar-shell';
+
+        const timeRail = document.createElement('div');
+        timeRail.className = 'calendar-time-rail';
+
+        const timeRailInner = document.createElement('div');
+        timeRailInner.className = 'calendar-time-rail-inner';
+
+        timeRail.appendChild(timeRailInner);
+
+        const parent = calendar.parentNode;
+        parent.insertBefore(shell, calendar);
+        shell.appendChild(timeRail);
+        shell.appendChild(calendar);
+
+        els.calendarShell = shell;
+        els.timeRail = timeRail;
+        els.timeRailInner = timeRailInner;
+    }
+
     function buildDynamicStyle() {
         const dynamicStyle = document.createElement('style');
         document.head.appendChild(dynamicStyle);
@@ -123,6 +147,42 @@
         els.deleteBtn = deleteBtn;
     }
 
+    function buildTimeRail() {
+        const railInner = els.timeRailInner;
+        railInner.innerHTML = '';
+
+        const spacer = document.createElement('div');
+        spacer.className = 'calendar-time-rail-spacer';
+        railInner.appendChild(spacer);
+
+        for (let h = config.startHour; h < config.endHour; h++) {
+            for (let qtr = 0; qtr < 4; qtr++) {
+                const row = document.createElement('div');
+                row.className = 'calendar-time-rail-row';
+
+                if (qtr === 0) {
+                    row.classList.add('hour-marker');
+
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const displayHour = h % 12 === 0 ? 12 : h % 12;
+                    row.innerHTML = `<span>${displayHour} ${ampm}</span>`;
+                }
+
+                railInner.appendChild(row);
+            }
+        }
+
+        const endRow = document.createElement('div');
+        endRow.className = 'calendar-time-rail-row hour-marker end-marker';
+        endRow.innerHTML = `<span>12 AM</span>`;
+        railInner.appendChild(endRow);
+    }
+
+    function syncTimeRailScroll() {
+        if (!els.timeRailInner) return;
+        els.timeRailInner.style.transform = `translateY(${-calendar.scrollTop}px)`;
+    }
+
     function openModal(title, defaultText, defaultColor, callback) {
         els.modalTitle.textContent = title;
         els.modalTextarea.value = defaultText;
@@ -184,24 +244,35 @@
         const quarterHourPx = config.pixelsPerHour / 4;
         const numRows = utils.getTotalRows();
 
+        calendar.style.gridTemplateColumns = `repeat(7, minmax(80px, 1fr))`;
         calendar.style.gridTemplateRows = `var(--calendar-header-height, 60px) repeat(${numRows}, ${quarterHourPx}px) 0px`;
 
         els.dynamicStyle.textContent = `
-            .slot, .time-label {
+            .slot,
+            .calendar-time-rail-row {
                 height: ${quarterHourPx}px !important;
                 min-height: ${quarterHourPx}px !important;
                 max-height: ${quarterHourPx}px !important;
             }
+
+            .calendar-time-rail-spacer {
+                height: var(--calendar-header-height, 60px) !important;
+                min-height: var(--calendar-header-height, 60px) !important;
+                max-height: var(--calendar-header-height, 60px) !important;
+            }
+
+            .calendar-time-rail-row.end-marker {
+                height: 0px !important;
+                min-height: 0px !important;
+                max-height: 0px !important;
+            }
         `;
 
+        syncTimeRailScroll();
         updateNowIndicator();
     }
 
     function initCalendarGrid() {
-        const corner = document.createElement('div');
-        corner.className = 'header-corner';
-        calendar.appendChild(corner);
-
         const todayIdx = utils.getTodayIndex();
 
         for (let i = 0; i < 7; i++) {
@@ -213,18 +284,6 @@
 
         for (let h = config.startHour; h < config.endHour; h++) {
             for (let qtr = 0; qtr < 4; qtr++) {
-                const timeLabel = document.createElement('div');
-                timeLabel.className = 'time-label';
-
-                if (qtr === 0) {
-                    timeLabel.classList.add('hour-marker');
-                    const ampm = h >= 12 ? 'PM' : 'AM';
-                    const displayHour = h % 12 === 0 ? 12 : h % 12;
-                    timeLabel.innerHTML = `<span>${displayHour} ${ampm}</span>`;
-                }
-
-                calendar.appendChild(timeLabel);
-
                 for (let d = 0; d < 7; d++) {
                     const slot = document.createElement('div');
                     slot.className = 'slot';
@@ -242,11 +301,6 @@
                 }
             }
         }
-
-        const endLabel = document.createElement('div');
-        endLabel.className = 'time-label hour-marker end-marker';
-        endLabel.innerHTML = `<span>12 AM</span>`;
-        calendar.appendChild(endLabel);
 
         for (let d = 0; d < 7; d++) {
             const endSlot = document.createElement('div');
@@ -305,12 +359,17 @@
         if (app.ui._initialized) return;
         app.ui._initialized = true;
 
+        buildCalendarShell();
         buildDynamicStyle();
         buildNowLine();
         buildModal();
         buildMenu();
+        buildTimeRail();
         initCalendarGrid();
         applyFixedScale();
+
+        calendar.addEventListener('scroll', syncTimeRailScroll);
+
         startNowIndicator();
     }
 
@@ -321,4 +380,5 @@
     app.ui.startNowIndicator = startNowIndicator;
     app.ui.applyFixedScale = applyFixedScale;
     app.ui.renderEventUI = renderEventUI;
+    app.ui.syncTimeRailScroll = syncTimeRailScroll;
 })();
