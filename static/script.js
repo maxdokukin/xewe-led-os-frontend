@@ -24,8 +24,8 @@ scaleLabel.style.fontWeight = '500';
 const scaleSlider = document.createElement('input');
 scaleSlider.type = 'range';
 scaleSlider.min = '40';
-scaleSlider.max = '300';
-scaleSlider.value = '80'; // Default to 80px per hour
+scaleSlider.max = '400';
+scaleSlider.value = '120';
 scaleSlider.style.cursor = 'pointer';
 
 const scaleValueDisplay = document.createElement('span');
@@ -41,26 +41,30 @@ controlBar.appendChild(scaleValueDisplay);
 // Insert control bar before the calendar in the DOM
 calendar.parentNode.insertBefore(controlBar, calendar);
 
-// Create a dynamic style tag to control element heights
+// Create a dynamic style tag to control element heights and new visual tweaks
 const dynamicStyle = document.createElement('style');
 document.head.appendChild(dynamicStyle);
 
 function updateScale(pixelsPerHour) {
     scaleValueDisplay.textContent = pixelsPerHour;
-    const halfHourPx = pixelsPerHour / 2;
+    const quarterHourPx = pixelsPerHour / 4;
 
-    // 1. Force the CSS Grid to actually resize its row tracks
-    // Row 1 is 'auto' for the headers. The rest are set to our dynamic half-hour pixel size.
-    const numRows = (endHour - startHour) * 2;
-    calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${halfHourPx}px)`;
+    const numRows = (endHour - startHour) * 4;
+    calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${quarterHourPx}px)`;
 
-    // 2. Ensure children lock to the new grid track sizes cleanly
+    // Added visual tweaks: thicker hour lines and header margin
     dynamicStyle.textContent = `
         .slot, .time-label {
-            height: ${halfHourPx}px !important;
-            min-height: ${halfHourPx}px !important;
-            max-height: ${halfHourPx}px !important;
+            height: ${quarterHourPx}px !important;
+            min-height: ${quarterHourPx}px !important;
+            max-height: ${quarterHourPx}px !important;
             box-sizing: border-box !important;
+        }
+        .hour-marker {
+            border-top: 2px solid #999 !important; /* Thicker line for full hours */
+        }
+        .day-header, .header-corner {
+            margin-bottom: 8px !important; /* Gap between header and grid */
         }
     `;
 }
@@ -82,12 +86,10 @@ function rgbToHex(r, g, b) {
 }
 
 function hsvToHex(h, s, v) {
-    // Hardware/FastLED format: H, S, and V are all 0-255
     h = clamp(parseInt(h), 0, 255);
     s = clamp(parseInt(s), 0, 255);
     v = clamp(parseInt(v), 0, 255);
 
-    // Convert to standard math formats
     let h_deg = (h / 255) * 360;
     let s_norm = s / 255;
     let v_norm = v / 255;
@@ -132,7 +134,8 @@ function initCalendar() {
     corner.className = 'header-corner';
     calendar.appendChild(corner);
 
-    const todayIdx = new Date().getDay();
+    const jsDay = new Date().getDay();
+    const todayIdx = jsDay === 0 ? 6 : jsDay - 1;
     const todayDate = new Date().getDate();
 
     for (let i = 0; i < 7; i++) {
@@ -150,10 +153,13 @@ function initCalendar() {
     }
 
     for (let h = startHour; h < endHour; h++) {
-        for(let half = 0; half < 2; half++) {
+        for(let qtr = 0; qtr < 4; qtr++) {
             const timeLabel = document.createElement('div');
             timeLabel.className = 'time-label';
-            if (half === 0) {
+
+            // Add the heavy top border to the top of the hour
+            if (qtr === 0) {
+                timeLabel.classList.add('hour-marker');
                 const ampm = h >= 12 ? 'PM' : 'AM';
                 const displayHour = h % 12 === 0 ? 12 : h % 12;
                 timeLabel.innerHTML = `<span>${displayHour} ${ampm}</span>`;
@@ -164,13 +170,19 @@ function initCalendar() {
                 const slot = document.createElement('div');
                 slot.className = 'slot';
                 slot.dataset.day = d;
-                slot.dataset.time = `${h}:${half === 0 ? '00' : '30'}`;
+
+                // Add the heavy top border to the top of the hour slots
+                if (qtr === 0) {
+                    slot.classList.add('hour-marker');
+                }
+
+                const mins = qtr === 0 ? '00' : qtr === 1 ? '15' : qtr === 2 ? '30' : '45';
+                slot.dataset.time = `${h}:${mins}`;
                 calendar.appendChild(slot);
             }
         }
     }
 
-    // Initialize scale after the calendar DOM nodes exist
     updateScale(scaleSlider.value);
 }
 
