@@ -120,7 +120,8 @@
                             slot.style.backgroundColor = '';
                         });
                     }
-                }
+                },
+                false // <-- Added 'false' here to indicate creation mode (allow auto-color)
             );
         }
 

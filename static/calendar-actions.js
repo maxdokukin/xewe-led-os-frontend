@@ -77,7 +77,7 @@
 
                 syncEventToServer(eventId);
             }
-        });
+        }, true); // <-- Added 'true' here to indicate editing mode
     }
 
     function createEventFromSlots(slotList, commandArray, color) {

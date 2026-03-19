@@ -91,9 +91,12 @@
         document.body.appendChild(modalOverlay);
 
         modalTextarea.addEventListener('input', () => {
-            const autoDetectedColor = utils.detectColorFromCommands(modalTextarea.value);
-            if (autoDetectedColor) {
-                modalColorInput.value = autoDetectedColor;
+            // ONLY Auto-detect color if we are NOT in edit mode
+            if (!state.isEditingModal) {
+                const autoDetectedColor = utils.detectColorFromCommands(modalTextarea.value);
+                if (autoDetectedColor) {
+                    modalColorInput.value = autoDetectedColor;
+                }
             }
         });
 
@@ -185,12 +188,19 @@
         els.timeRailInner.style.transform = `translateY(${-calendar.scrollTop}px)`;
     }
 
-    function openModal(title, defaultText, defaultColor, callback) {
+    // Notice the isEditing default parameter added here
+    function openModal(title, defaultText, defaultColor, callback, isEditing = false) {
+        state.isEditingModal = isEditing;
+
         els.modalTitle.textContent = title;
         els.modalTextarea.value = defaultText;
 
-        const preDetectedColor = utils.detectColorFromCommands(defaultText);
-        els.modalColorInput.value = preDetectedColor ? preDetectedColor : defaultColor;
+        if (!isEditing) {
+            const preDetectedColor = utils.detectColorFromCommands(defaultText);
+            els.modalColorInput.value = preDetectedColor ? preDetectedColor : defaultColor;
+        } else {
+            els.modalColorInput.value = defaultColor;
+        }
 
         state.modalCallback = callback;
         els.modalOverlay.style.display = 'flex';
