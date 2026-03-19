@@ -7,7 +7,7 @@
         days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         startHour: 0,
         endHour: 24,
-        pixelsPerHour: 29
+        pixelsPerHour: 35
     };
 
     app.state = {
@@ -111,6 +111,24 @@
         return 'evt-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
     }
 
+    function getCalendarHeaderHeightPx() {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const cssVar = rootStyles.getPropertyValue('--calendar-header-height').trim();
+        const cssVarPx = parseFloat(cssVar);
+
+        if (!Number.isNaN(cssVarPx) && cssVarPx > 0) {
+            return cssVarPx;
+        }
+
+        const header = app.calendar ? app.calendar.querySelector('.day-header') : null;
+        if (header) {
+            const measured = header.getBoundingClientRect().height;
+            if (measured > 0) return measured;
+        }
+
+        return 60;
+    }
+
     app.utils = {
         clamp,
         rgbToHex,
@@ -121,6 +139,7 @@
         timeToRow,
         rowToTime,
         getSlotByDayRow,
-        generateEventId
+        generateEventId,
+        getCalendarHeaderHeightPx
     };
 })();

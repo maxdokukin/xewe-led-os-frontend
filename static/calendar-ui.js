@@ -159,7 +159,7 @@
         }
 
         const pixelsPerHour = config.pixelsPerHour;
-        const headerHeight = 60;
+        const headerHeight = utils.getCalendarHeaderHeightPx();
         const top = headerHeight + ((hours - config.startHour) + (minutes / 60)) * pixelsPerHour;
 
         els.nowLine.style.display = 'block';
@@ -184,7 +184,7 @@
         const quarterHourPx = config.pixelsPerHour / 4;
         const numRows = utils.getTotalRows();
 
-        calendar.style.gridTemplateRows = `auto repeat(${numRows}, ${quarterHourPx}px) 0px`;
+        calendar.style.gridTemplateRows = `var(--calendar-header-height, 60px) repeat(${numRows}, ${quarterHourPx}px) 0px`;
 
         els.dynamicStyle.textContent = `
             .slot, .time-label {

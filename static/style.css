@@ -8,6 +8,7 @@
     --event-bg: rgba(255, 59, 48, 0.25); /* Apple Calendar Red, slightly boosted for dark mode */
     --event-border: #ff453a;
     --event-text: #ff453a;
+    --calendar-header-height: 40px;
 }
 
 * {
@@ -68,11 +69,10 @@ h2 {
     display: grid;
     /* Grid rows are dynamically overridden by JS scale slider */
     grid-template-columns: 60px repeat(7, minmax(80px, 1fr));
-    grid-template-rows: 60px repeat(24, 40px);
+    grid-template-rows: var(--calendar-header-height) repeat(24, 40px);
     overflow-y: auto;
     overflow-x: auto;
-    border-top: 1px solid var(--border-color);
-    border-left: 1px solid var(--border-color);
+    border: 1px solid var(--border-color);
     touch-action: none;
     user-select: none;
 }
