@@ -329,3 +329,16 @@ h2 {
 .menu-btn-delete {
     color: #ff453a;
 }
+
+.calendar-container {
+    position: relative;
+}
+
+.now-line {
+    position: absolute;
+    height: 0;
+    border-top: 2px solid #ff3b30;
+    z-index: 30;
+    pointer-events: none;
+    display: none;
+}

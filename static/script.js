@@ -36,6 +36,59 @@ calendar.after(controlBar);
 const dynamicStyle = document.createElement('style');
 document.head.appendChild(dynamicStyle);
 
+// --- CURRENT TIME INDICATOR ---
+const nowLine = document.createElement('div');
+nowLine.className = 'now-line';
+calendar.appendChild(nowLine);
+
+let nowLineTimer = null;
+
+function getTodayIndex() {
+    const jsDay = new Date().getDay(); // Sun=0 ... Sat=6
+    return jsDay === 0 ? 6 : jsDay - 1; // Mon=0 ... Sun=6
+}
+
+function updateNowIndicator() {
+    const now = new Date();
+    const todayIdx = getTodayIndex();
+
+    const dayHeaders = calendar.querySelectorAll('.day-header');
+    const header = dayHeaders[todayIdx];
+
+    if (!header) {
+        nowLine.style.display = 'none';
+        return;
+    }
+
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+
+    // Hide the line if outside the displayed calendar range
+    if (hours < startHour || hours >= endHour) {
+        nowLine.style.display = 'none';
+        return;
+    }
+
+    const pixelsPerHour = parseFloat(scaleSlider.value);
+    const headerHeight = 60; // matches your grid header row
+    const top = headerHeight + ((hours - startHour) + (minutes / 60)) * pixelsPerHour;
+
+    nowLine.style.display = 'block';
+    nowLine.style.left = `${header.offsetLeft}px`;
+    nowLine.style.top = `${top}px`;
+    nowLine.style.width = `${header.offsetWidth}px`;
+}
+
+function startNowIndicator() {
+    updateNowIndicator();
+
+    if (nowLineTimer) clearInterval(nowLineTimer);
+
+    nowLineTimer = setInterval(() => {
+        updateNowIndicator();
+    }, 30000);
+}
+
 function updateScale(pixelsPerHour) {
     // Update the text display whenever the slider moves
     scaleValueDisplay.textContent = pixelsPerHour;
@@ -51,6 +104,7 @@ function updateScale(pixelsPerHour) {
             max-height: ${quarterHourPx}px !important;
         }
     `;
+    updateNowIndicator();
 }
 
 scaleSlider.addEventListener('input', (e) => updateScale(e.target.value));
@@ -172,9 +226,12 @@ function initCalendar() {
     }
 
     updateScale(scaleSlider.value);
+    startNowIndicator();
 }
 
 initCalendar();
+window.addEventListener('resize', updateNowIndicator);
+calendar.addEventListener('scroll', updateNowIndicator);
 
 // --- UI HELPERS ---
 function renderEventUI(eventId) {
