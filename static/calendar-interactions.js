@@ -214,4 +214,7 @@
     app.ui.init();
     app.actions.bindMenuActions();
     app.interactions.bind();
+
+    // FETCH TRIGGER
+    app.actions.fetchAndLoadSchedules();
 })();

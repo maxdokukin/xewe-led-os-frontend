@@ -7,7 +7,7 @@ SCHEDULE_DATA = {
     "1": {
         "id": "1",
         "commands": ['"$led_set_rgb 255 0 0" "$led turn_off"'],
-        "color": "#33FF33",
+        "color": "#FF00FF",
         "day": 0,
         "start_time": 540,
         "end_time": 600

@@ -186,6 +186,63 @@
         return true;
     }
 
+    // --- FIXED FETCH LOGIC ---
+    async function fetchAndLoadSchedules() {
+        try {
+            const response = await fetch('/schedule/json');
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+
+            // Clear existing data
+            for (const id in state.eventDatabase) {
+                clearEventSlots(id);
+            }
+            state.eventDatabase = {};
+
+            // Process backend JSON
+            for (const key in data) {
+                const evt = data[key];
+                const slotsArray = [];
+                const eventId = evt.id.toString();
+
+                for (let m = evt.start_time; m < evt.end_time; m += 15) {
+                    const hour = Math.floor(m / 60);
+                    const minute = (m % 60).toString().padStart(2, '0');
+                    const timeStr = `${hour}:${minute}`;
+
+                    slotsArray.push({
+                        day: evt.day,
+                        time: timeStr
+                    });
+
+                    // CRITICAL FIX: We must stamp the dataset ID onto the HTML slot directly
+                    // so that `app.ui.renderEventUI()` can find it!
+                    const domSlot = calendar.querySelector(`.slot[data-day="${evt.day}"][data-time="${timeStr}"]`);
+                    if (domSlot) {
+                        domSlot.dataset.eventId = eventId;
+                    }
+                }
+
+                state.eventDatabase[eventId] = {
+                    id: eventId,
+                    commands: evt.commands,
+                    color: evt.color || '#33ff33',
+                    slots: slotsArray
+                };
+            }
+
+            // Render newly loaded UI blocks
+            for (const id in state.eventDatabase) {
+                app.ui.renderEventUI(id);
+            }
+            console.log("Loaded Database from Server:", state.eventDatabase);
+
+        } catch (error) {
+            console.error("Failed to load schedules from server:", error);
+        }
+    }
+
     function bindMenuActions() {
         if (app.actions._bound) return;
         app.actions._bound = true;
@@ -239,4 +296,5 @@
     app.actions.canPasteBlockAt = canPasteBlockAt;
     app.actions.pasteCopiedBlockAt = pasteCopiedBlockAt;
     app.actions.bindMenuActions = bindMenuActions;
+    app.actions.fetchAndLoadSchedules = fetchAndLoadSchedules;
 })();
