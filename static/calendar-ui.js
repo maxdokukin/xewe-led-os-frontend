@@ -1,396 +1,154 @@
 // calendar-ui.js
-
 (function () {
     const app = window.CalendarApp;
     const { calendar, config, state, els, utils } = app;
 
-    function buildCalendarShell() {
+    function buildUI() {
         if (els.calendarShell) return;
 
-        const shell = document.createElement('div');
-        shell.className = 'calendar-shell';
+        // 1. Build Shell, Time Rail, Modal, and Menu in one shot
+        calendar.insertAdjacentHTML('beforebegin', `<div class="calendar-shell"><div class="calendar-time-rail"><div class="calendar-time-rail-inner"></div></div></div>`);
+        calendar.insertAdjacentHTML('beforeend', `<div class="now-line" style="display:none;"></div>`);
 
-        const timeRail = document.createElement('div');
-        timeRail.className = 'calendar-time-rail';
+        document.body.insertAdjacentHTML('beforeend', `
+            <div class="modal-overlay" style="display:none;">
+                <div class="modal-box">
+                    <h3 class="modal-title"></h3>
+                    <textarea class="modal-textarea" rows="6"></textarea>
+                    <div class="color-container"><span class="color-label">Color:</span><input type="color" class="modal-color-input"></div>
+                    <div class="modal-btn-container"><button class="btn-cancel">Cancel</button><button class="btn-save">Save</button></div>
+                </div>
+            </div>
+            <div class="context-menu" style="display:none;">
+                <button class="menu-btn" id="m-edit">Edit Commands / Color</button>
+                <button class="menu-btn" id="m-copy">Copy Block</button>
+                <button class="menu-btn" id="m-paste">Paste Block</button>
+                <button class="menu-btn menu-btn-delete" id="m-del">Delete Block</button>
+            </div>
+            <style id="calendar-dynamic-style"></style>
+        `);
 
-        const timeRailInner = document.createElement('div');
-        timeRailInner.className = 'calendar-time-rail-inner';
+        // 2. Map Elements
+        Object.assign(els, {
+            calendarShell: calendar.previousElementSibling,
+            timeRailInner: calendar.previousElementSibling.querySelector('.calendar-time-rail-inner'),
+            nowLine: calendar.querySelector('.now-line'),
+            modalOverlay: document.querySelector('.modal-overlay'),
+            modalBox: document.querySelector('.modal-box'),
+            modalTitle: document.querySelector('.modal-title'),
+            modalTextarea: document.querySelector('.modal-textarea'),
+            modalColorInput: document.querySelector('.modal-color-input'),
+            cancelModalBtn: document.querySelector('.btn-cancel'),
+            saveModalBtn: document.querySelector('.btn-save'),
+            menu: document.querySelector('.context-menu'),
+            editCmdBtn: document.getElementById('m-edit'),
+            copyBtn: document.getElementById('m-copy'),
+            pasteBtn: document.getElementById('m-paste'),
+            deleteBtn: document.getElementById('m-del'),
+            dynamicStyle: document.getElementById('calendar-dynamic-style')
+        });
 
-        timeRail.appendChild(timeRailInner);
+        els.calendarShell.appendChild(calendar); // Move calendar into shell
 
-        const parent = calendar.parentNode;
-        parent.insertBefore(shell, calendar);
-        shell.appendChild(timeRail);
-        shell.appendChild(calendar);
-
-        els.calendarShell = shell;
-        els.timeRail = timeRail;
-        els.timeRailInner = timeRailInner;
-    }
-
-    function buildDynamicStyle() {
-        const dynamicStyle = document.createElement('style');
-        document.head.appendChild(dynamicStyle);
-        els.dynamicStyle = dynamicStyle;
-    }
-
-    function buildNowLine() {
-        const nowLine = document.createElement('div');
-        nowLine.className = 'now-line';
-        calendar.appendChild(nowLine);
-        els.nowLine = nowLine;
-    }
-
-    function buildModal() {
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay';
-
-        const modalBox = document.createElement('div');
-        modalBox.className = 'modal-box';
-
-        const modalTitle = document.createElement('h3');
-        modalTitle.className = 'modal-title';
-
-        const modalTextarea = document.createElement('textarea');
-        modalTextarea.rows = 6;
-        modalTextarea.className = 'modal-textarea';
-
-        const colorContainer = document.createElement('div');
-        colorContainer.className = 'color-container';
-
-        const colorLabel = document.createElement('span');
-        colorLabel.textContent = 'Block Color:';
-        colorLabel.className = 'color-label';
-
-        const modalColorInput = document.createElement('input');
-        modalColorInput.type = 'color';
-        modalColorInput.className = 'modal-color-input';
-
-        colorContainer.appendChild(colorLabel);
-        colorContainer.appendChild(modalColorInput);
-
-        const modalBtnContainer = document.createElement('div');
-        modalBtnContainer.className = 'modal-btn-container';
-
-        const cancelModalBtn = document.createElement('button');
-        cancelModalBtn.textContent = 'Cancel';
-        cancelModalBtn.className = 'btn-cancel';
-
-        const saveModalBtn = document.createElement('button');
-        saveModalBtn.textContent = 'Save';
-        saveModalBtn.className = 'btn-save';
-
-        modalBtnContainer.appendChild(cancelModalBtn);
-        modalBtnContainer.appendChild(saveModalBtn);
-
-        modalBox.appendChild(modalTitle);
-        modalBox.appendChild(modalTextarea);
-        modalBox.appendChild(colorContainer);
-        modalBox.appendChild(modalBtnContainer);
-        modalOverlay.appendChild(modalBox);
-        document.body.appendChild(modalOverlay);
-
-        modalTextarea.addEventListener('input', () => {
-            // ONLY Auto-detect color if we are NOT in edit mode
+        // 3. Modal Events (Preserving editing flag auto-color logic)
+        els.modalTextarea.addEventListener('input', () => {
             if (!state.isEditingModal) {
-                const autoDetectedColor = utils.detectColorFromCommands(modalTextarea.value);
-                if (autoDetectedColor) {
-                    modalColorInput.value = autoDetectedColor;
-                }
+                const detected = utils.detectColorFromCommands(els.modalTextarea.value);
+                if (detected) els.modalColorInput.value = detected;
             }
         });
 
-        cancelModalBtn.onclick = () => {
-            if (state.modalCallback) state.modalCallback(null, null);
-            closeModal();
-        };
-
-        saveModalBtn.onclick = () => {
-            if (state.modalCallback) state.modalCallback(modalTextarea.value, modalColorInput.value);
-            closeModal();
-        };
-
-        els.modalOverlay = modalOverlay;
-        els.modalBox = modalBox;
-        els.modalTitle = modalTitle;
-        els.modalTextarea = modalTextarea;
-        els.modalColorInput = modalColorInput;
-        els.cancelModalBtn = cancelModalBtn;
-        els.saveModalBtn = saveModalBtn;
+        els.cancelModalBtn.onclick = () => { if (state.modalCallback) state.modalCallback(null, null); closeModal(); };
+        els.saveModalBtn.onclick = () => { if (state.modalCallback) state.modalCallback(els.modalTextarea.value, els.modalColorInput.value); closeModal(); };
     }
 
-    function buildMenu() {
-        const menu = document.createElement('div');
-        menu.className = 'context-menu';
-
-        const editCmdBtn = document.createElement('button');
-        editCmdBtn.textContent = 'Edit Commands / Color';
-        editCmdBtn.className = 'menu-btn';
-
-        const copyBtn = document.createElement('button');
-        copyBtn.textContent = 'Copy Block';
-        copyBtn.className = 'menu-btn';
-
-        const pasteBtn = document.createElement('button');
-        pasteBtn.textContent = 'Paste Block';
-        pasteBtn.className = 'menu-btn';
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete Block';
-        deleteBtn.className = 'menu-btn menu-btn-delete';
-
-        menu.appendChild(editCmdBtn);
-        menu.appendChild(copyBtn);
-        menu.appendChild(pasteBtn);
-        menu.appendChild(deleteBtn);
-        document.body.appendChild(menu);
-
-        els.menu = menu;
-        els.editCmdBtn = editCmdBtn;
-        els.copyBtn = copyBtn;
-        els.pasteBtn = pasteBtn;
-        els.deleteBtn = deleteBtn;
-    }
-
-    function buildTimeRail() {
-        const railInner = els.timeRailInner;
-        railInner.innerHTML = '';
-
-        const spacer = document.createElement('div');
-        spacer.className = 'calendar-time-rail-spacer';
-        railInner.appendChild(spacer);
-
+    function buildGridAndTimeRail() {
+        // Time Rail
+        let railHtml = '<div class="calendar-time-rail-spacer"></div>';
         for (let h = config.startHour; h < config.endHour; h++) {
-            for (let qtr = 0; qtr < 4; qtr++) {
-                const row = document.createElement('div');
-                row.className = 'calendar-time-rail-row';
-
-                if (qtr === 0) {
-                    row.classList.add('hour-marker');
-
-                    const ampm = h >= 12 ? 'PM' : 'AM';
-                    const displayHour = h % 12 === 0 ? 12 : h % 12;
-                    row.innerHTML = `<span>${displayHour} ${ampm}</span>`;
-                }
-
-                railInner.appendChild(row);
+            for (let q = 0; q < 4; q++) {
+                railHtml += `<div class="calendar-time-rail-row ${q === 0 ? 'hour-marker' : ''}">${q === 0 ? `<span>${h % 12 || 12} ${h >= 12 ? 'PM' : 'AM'}</span>` : ''}</div>`;
             }
         }
+        els.timeRailInner.innerHTML = railHtml + '<div class="calendar-time-rail-row hour-marker end-marker"><span>12 AM</span></div>';
 
-        const endRow = document.createElement('div');
-        endRow.className = 'calendar-time-rail-row hour-marker end-marker';
-        endRow.innerHTML = `<span>12 AM</span>`;
-        railInner.appendChild(endRow);
-    }
+        // Grid
+        const today = utils.getTodayIndex();
+        let gridHtml = config.days.map((d, i) => `<div class="day-header ${i === today ? 'today' : ''}"><div class="day-name">${d}</div></div>`).join('');
 
-    function syncTimeRailScroll() {
-        if (!els.timeRailInner) return;
-        els.timeRailInner.style.transform = `translateY(${-calendar.scrollTop}px)`;
-    }
-
-    // Notice the isEditing default parameter added here
-    function openModal(title, defaultText, defaultColor, callback, isEditing = false) {
-        state.isEditingModal = isEditing;
-
-        els.modalTitle.textContent = title;
-        els.modalTextarea.value = defaultText;
-
-        if (!isEditing) {
-            const preDetectedColor = utils.detectColorFromCommands(defaultText);
-            els.modalColorInput.value = preDetectedColor ? preDetectedColor : defaultColor;
-        } else {
-            els.modalColorInput.value = defaultColor;
+        for (let h = config.startHour; h < config.endHour; h++) {
+            for (let q = 0; q < 4; q++) {
+                const time = `${h}:${q === 0 ? '00' : q * 15}`;
+                const row = (h - config.startHour) * 4 + q;
+                for (let d = 0; d < 7; d++) {
+                    gridHtml += `<div class="slot ${q === 0 ? 'hour-marker' : ''}" data-day="${d}" data-time="${time}" data-row="${row}"></div>`;
+                }
+            }
         }
+        calendar.insertAdjacentHTML('beforeend', gridHtml + Array(7).fill('<div class="slot hour-marker end-marker"></div>').join(''));
+    }
 
+    function applyFixedScale() {
+        const qtrPx = config.pixelsPerHour / 4;
+        calendar.style.gridTemplateColumns = `repeat(7, minmax(80px, 1fr))`;
+        calendar.style.gridTemplateRows = `var(--calendar-header-height, 60px) repeat(${utils.getTotalRows()}, ${qtrPx}px) 0px`;
+
+        els.dynamicStyle.textContent = `
+            .slot, .calendar-time-rail-row { height: ${qtrPx}px !important; min-height: ${qtrPx}px !important; max-height: ${qtrPx}px !important; }
+            .calendar-time-rail-spacer { height: var(--calendar-header-height, 60px) !important; min-height: var(--calendar-header-height, 60px) !important; }
+            .calendar-time-rail-row.end-marker { height: 0px !important; min-height: 0px !important; }
+            body.calendar-dragging, body.calendar-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: crosshair !important; }
+        `;
+        syncTimeRailScroll(); updateNowIndicator();
+    }
+
+    function openModal(title, text, color, callback, isEditing = false) {
+        state.isEditingModal = isEditing;
+        els.modalTitle.textContent = title;
+        els.modalTextarea.value = text;
+        els.modalColorInput.value = (!isEditing && utils.detectColorFromCommands(text)) || color;
         state.modalCallback = callback;
         els.modalOverlay.style.display = 'flex';
         els.modalTextarea.focus();
     }
 
-    function closeModal() {
-        els.modalOverlay.style.display = 'none';
-        state.modalCallback = null;
-    }
+    function closeModal() { els.modalOverlay.style.display = 'none'; state.modalCallback = null; }
+    function syncTimeRailScroll() { if (els.timeRailInner) els.timeRailInner.style.transform = `translateY(${-calendar.scrollTop}px)`; }
 
     function updateNowIndicator() {
-        const dayHeaders = calendar.querySelectorAll('.day-header');
-        const header = dayHeaders[utils.getTodayIndex()];
-
-        if (!header) {
-            els.nowLine.style.display = 'none';
-            return;
-        }
-
+        const header = calendar.querySelectorAll('.day-header')[utils.getTodayIndex()];
         const now = new Date();
-        const hours = now.getHours();
-        const minutes = now.getMinutes();
+        const hrs = now.getHours();
 
-        if (hours < config.startHour || hours >= config.endHour) {
-            els.nowLine.style.display = 'none';
-            return;
-        }
+        if (!header || hrs < config.startHour || hrs >= config.endHour) return els.nowLine.style.display = 'none';
 
-        const pixelsPerHour = config.pixelsPerHour;
-        const headerHeight = utils.getCalendarHeaderHeightPx();
-        const top = headerHeight + ((hours - config.startHour) + (minutes / 60)) * pixelsPerHour;
-
-        els.nowLine.style.display = 'block';
-        els.nowLine.style.left = `${header.offsetLeft}px`;
-        els.nowLine.style.top = `${top}px`;
-        els.nowLine.style.width = `${header.offsetWidth}px`;
-    }
-
-    function startNowIndicator() {
-        updateNowIndicator();
-
-        if (state.nowLineTimer) {
-            clearInterval(state.nowLineTimer);
-        }
-
-        state.nowLineTimer = setInterval(() => {
-            updateNowIndicator();
-        }, 30000);
-    }
-
-    function applyFixedScale() {
-        const quarterHourPx = config.pixelsPerHour / 4;
-        const numRows = utils.getTotalRows();
-
-        calendar.style.gridTemplateColumns = `repeat(7, minmax(80px, 1fr))`;
-        calendar.style.gridTemplateRows = `var(--calendar-header-height, 60px) repeat(${numRows}, ${quarterHourPx}px) 0px`;
-
-        els.dynamicStyle.textContent = `
-            .slot,
-            .calendar-time-rail-row {
-                height: ${quarterHourPx}px !important;
-                min-height: ${quarterHourPx}px !important;
-                max-height: ${quarterHourPx}px !important;
-            }
-
-            .calendar-time-rail-spacer {
-                height: var(--calendar-header-height, 60px) !important;
-                min-height: var(--calendar-header-height, 60px) !important;
-                max-height: var(--calendar-header-height, 60px) !important;
-            }
-
-            .calendar-time-rail-row.end-marker {
-                height: 0px !important;
-                min-height: 0px !important;
-                max-height: 0px !important;
-            }
-        `;
-
-        syncTimeRailScroll();
-        updateNowIndicator();
-    }
-
-    function initCalendarGrid() {
-        const todayIdx = utils.getTodayIndex();
-
-        for (let i = 0; i < 7; i++) {
-            const header = document.createElement('div');
-            header.className = `day-header ${i === todayIdx ? 'today' : ''}`;
-            header.innerHTML = `<div class="day-name">${config.days[i]}</div>`;
-            calendar.appendChild(header);
-        }
-
-        for (let h = config.startHour; h < config.endHour; h++) {
-            for (let qtr = 0; qtr < 4; qtr++) {
-                for (let d = 0; d < 7; d++) {
-                    const slot = document.createElement('div');
-                    slot.className = 'slot';
-                    slot.dataset.day = d;
-
-                    if (qtr === 0) {
-                        slot.classList.add('hour-marker');
-                    }
-
-                    const mins = qtr === 0 ? '00' : qtr === 1 ? '15' : qtr === 2 ? '30' : '45';
-                    slot.dataset.time = `${h}:${mins}`;
-                    slot.dataset.row = (h - config.startHour) * 4 + qtr;
-
-                    calendar.appendChild(slot);
-                }
-            }
-        }
-
-        for (let d = 0; d < 7; d++) {
-            const endSlot = document.createElement('div');
-            endSlot.className = 'slot hour-marker end-marker';
-            calendar.appendChild(endSlot);
-        }
+        els.nowLine.style.cssText = `display: block; left: ${header.offsetLeft}px; top: ${utils.getCalendarHeaderHeightPx() + ((hrs - config.startHour) + (now.getMinutes() / 60)) * config.pixelsPerHour}px; width: ${header.offsetWidth}px;`;
     }
 
     function renderEventUI(eventId) {
         const event = state.eventDatabase[eventId];
         if (!event) return;
 
-        const slots = calendar.querySelectorAll(`.slot[data-event-id="${eventId}"]`);
-        slots.forEach((slot) => {
-            slot.innerHTML = '';
-            slot.style.backgroundColor = event.color || '#007aff';
-            slot.classList.add('selected');
+        calendar.querySelectorAll(`.slot[data-event-id="${eventId}"]`).forEach(s => {
+            s.innerHTML = ''; s.style.backgroundColor = event.color || '#007aff'; s.classList.add('selected');
         });
 
-        const slotsByDay = {};
+        const sortedSlots = event.slots.map(s => calendar.querySelector(`.slot[data-day="${s.day}"][data-time="${s.time}"]`)).filter(Boolean)
+            .sort((a, b) => a.dataset.row - b.dataset.row);
 
-        event.slots.forEach((slotData) => {
-            const domSlot = calendar.querySelector(`.slot[data-day="${slotData.day}"][data-time="${slotData.time}"]`);
-            if (domSlot) {
-                if (!slotsByDay[slotData.day]) slotsByDay[slotData.day] = [];
-                slotsByDay[slotData.day].push(domSlot);
-            }
-        });
-
-        const allCmdsHTML = event.commands.map((cmd) => {
-            return `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">> ${cmd}</div>`;
-        }).join('');
-
-        for (const day in slotsByDay) {
-            const daySlots = slotsByDay[day];
-
-            daySlots.sort((a, b) => {
-                const timeA = a.dataset.time.split(':').map(Number);
-                const timeB = b.dataset.time.split(':').map(Number);
-                return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-            });
-
-            if (daySlots[0]) {
-                const numSlots = daySlots.length;
-                daySlots[0].style.position = 'relative';
-                daySlots[0].innerHTML = `
-                    <div class="slot-text" style="height: ${numSlots * 100}%;">
-                        ${allCmdsHTML}
-                    </div>
-                `;
-            }
+        if (sortedSlots.length) {
+            sortedSlots[0].style.position = 'relative';
+            sortedSlots[0].innerHTML = `<div class="slot-text" style="height: ${sortedSlots.length * 100}%;">${event.commands.map(cmd => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">> ${cmd}</div>`).join('')}</div>`;
         }
     }
 
-    function init() {
-        if (app.ui._initialized) return;
-        app.ui._initialized = true;
-
-        buildCalendarShell();
-        buildDynamicStyle();
-        buildNowLine();
-        buildModal();
-        buildMenu();
-        buildTimeRail();
-        initCalendarGrid();
-        applyFixedScale();
-
-        calendar.addEventListener('scroll', syncTimeRailScroll);
-
-        startNowIndicator();
-    }
-
-    app.ui.init = init;
-    app.ui.openModal = openModal;
-    app.ui.closeModal = closeModal;
-    app.ui.updateNowIndicator = updateNowIndicator;
-    app.ui.startNowIndicator = startNowIndicator;
-    app.ui.applyFixedScale = applyFixedScale;
-    app.ui.renderEventUI = renderEventUI;
-    app.ui.syncTimeRailScroll = syncTimeRailScroll;
+    Object.assign(app.ui, {
+        init: () => {
+            if (app.ui._initialized) return; app.ui._initialized = true;
+            buildUI(); buildGridAndTimeRail(); applyFixedScale();
+            calendar.addEventListener('scroll', syncTimeRailScroll);
+            updateNowIndicator(); setInterval(updateNowIndicator, 30000);
+        },
+        openModal, closeModal, updateNowIndicator, applyFixedScale, renderEventUI, syncTimeRailScroll
+    });
 })();

@@ -1,5 +1,4 @@
 // calendar-actions.js
-
 (function () {
     const app = window.CalendarApp;
     const { calendar, state, els, utils } = app;
@@ -7,363 +6,134 @@
     function hideMenu() {
         if (!els.menu) return;
         els.menu.style.display = 'none';
-        state.activeEventId = null;
-        state.menuTargetSlot = null;
+        state.activeEventId = state.menuTargetSlot = null;
     }
 
-    function showMenu(x, y, options = {}) {
-        const { eventId = null, targetSlot = null } = options;
-
+    function showMenu(x, y, { eventId = null, targetSlot = null } = {}) {
         state.activeEventId = eventId;
         state.menuTargetSlot = targetSlot;
 
-        const hasEvent = !!eventId;
-        const canPaste =
-            !!targetSlot &&
-            !targetSlot.dataset.eventId &&
-            !!state.copiedBlockData &&
-            canPasteBlockAt(targetSlot, state.copiedBlockData);
+        const canPaste = !!targetSlot && !targetSlot.dataset.eventId && !!state.copiedBlockData && app.actions.canPasteBlockAt(targetSlot);
 
-        els.editCmdBtn.style.display = hasEvent ? 'block' : 'none';
-        els.copyBtn.style.display = hasEvent ? 'block' : 'none';
-        els.deleteBtn.style.display = hasEvent ? 'block' : 'none';
-
-        els.pasteBtn.style.display = targetSlot ? 'block' : 'none';
+        els.editCmdBtn.style.display = els.copyBtn.style.display = els.deleteBtn.style.display = eventId ? 'block' : 'none';
+        els.pasteBtn.style.cssText = `display: ${targetSlot ? 'block' : 'none'}; opacity: ${canPaste ? '1' : '0.5'}; cursor: ${canPaste ? 'pointer' : 'not-allowed'};`;
         els.pasteBtn.disabled = !canPaste;
-        els.pasteBtn.style.opacity = canPaste ? '1' : '0.5';
-        els.pasteBtn.style.cursor = canPaste ? 'pointer' : 'not-allowed';
 
-        els.menu.style.display = 'flex';
-        els.menu.style.left = `${Math.min(x + 10, window.innerWidth - 180)}px`;
-        els.menu.style.top = `${Math.min(y + 10, window.innerHeight - 220)}px`;
+        els.menu.style.cssText = `display: flex; left: ${Math.min(x + 10, window.innerWidth - 180)}px; top: ${Math.min(y + 10, window.innerHeight - 220)}px;`;
     }
 
     function clearEventSlots(eventId) {
-        const slots = calendar.querySelectorAll(`.slot[data-event-id="${eventId}"]`);
-        slots.forEach((slot) => {
-            slot.classList.remove('selected');
-            slot.innerHTML = '';
-            slot.style.backgroundColor = '';
-            delete slot.dataset.eventId;
+        calendar.querySelectorAll(`.slot[data-event-id="${eventId}"]`).forEach(slot => {
+            slot.classList.remove('selected'); slot.innerHTML = ''; slot.style.backgroundColor = ''; delete slot.dataset.eventId;
         });
-    }
-
-    function deleteEvent(eventId) {
-        if (!eventId || !state.eventDatabase[eventId]) return;
-
-        clearEventSlots(eventId);
-        delete state.eventDatabase[eventId];
-
-        deleteEventFromServer(eventId);
-    }
-
-    function editEvent(eventId) {
-        const event = state.eventDatabase[eventId];
-        if (!event) return;
-
-        const currentCmds = event.commands.join('\n');
-        const currentColor = event.color || '#007aff';
-
-        app.ui.openModal('Edit Block', currentCmds, currentColor, (editedCmds, newColor) => {
-            if (editedCmds !== null) {
-                const newCommandArray = editedCmds
-                    .split('\n')
-                    .map(cmd => cmd.trim())
-                    .filter(cmd => cmd !== "");
-
-                state.eventDatabase[eventId].commands = newCommandArray;
-                state.eventDatabase[eventId].color = newColor;
-                app.ui.renderEventUI(eventId);
-
-                syncEventToServer(eventId);
-            }
-        }, true); // <-- Added 'true' here to indicate editing mode
     }
 
     function createEventFromSlots(slotList, commandArray, color) {
-        const uniqueEventId = utils.generateEventId();
+        const id = utils.generateEventId();
+        state.eventDatabase[id] = { id, commands: commandArray, color, slots: slotList.map(slot => {
+            slot.dataset.eventId = id; slot.classList.add('selected');
+            return { day: Number(slot.dataset.day), time: slot.dataset.time };
+        })};
+        app.ui.renderEventUI(id);
+        app.actions.syncEventToServer(id);
+        return id;
+    }
 
-        const newRecord = {
-            id: uniqueEventId,
-            commands: commandArray,
-            color: color,
-            slots: []
-        };
+    Object.assign(app.actions, {
+        hideMenu, showMenu, clearEventSlots, createEventFromSlots,
 
-        slotList.forEach((slot) => {
-            slot.dataset.eventId = uniqueEventId;
-            slot.classList.add('selected');
+        deleteEvent: (eventId) => {
+            if (!eventId || !state.eventDatabase[eventId]) return;
+            clearEventSlots(eventId); delete state.eventDatabase[eventId];
+            app.actions.deleteEventFromServer(eventId);
+        },
 
-            newRecord.slots.push({
-                day: Number(slot.dataset.day),
-                time: slot.dataset.time
+        editEvent: (eventId) => {
+            const evt = state.eventDatabase[eventId];
+            if (!evt) return;
+            app.ui.openModal('Edit Block', evt.commands.join('\n'), evt.color || '#007aff', (cmds, color) => {
+                if (cmds === null) return;
+                evt.commands = cmds.split('\n').map(c => c.trim()).filter(Boolean);
+                evt.color = color;
+                app.ui.renderEventUI(eventId);
+                app.actions.syncEventToServer(eventId);
+            }, true);
+        },
+
+        copyEventToClipboard: (eventId) => {
+            const evt = state.eventDatabase[eventId];
+            if (!evt || !evt.slots.length) return;
+            const norm = evt.slots.map(s => ({ day: Number(s.day), row: utils.timeToRow(s.time) }));
+            const minDay = Math.min(...norm.map(s => s.day)), minRow = Math.min(...norm.map(s => s.row));
+            state.copiedBlockData = { commands: [...evt.commands], color: evt.color || '#007aff', offsets: norm.map(s => ({ d: s.day - minDay, r: s.row - minRow })) };
+        },
+
+        canPasteBlockAt: (targetSlot, clip = state.copiedBlockData) => {
+            if (!targetSlot || !clip) return false;
+            const bDay = Number(targetSlot.dataset.day), bRow = Number(targetSlot.dataset.row);
+            return clip.offsets.every(off => {
+                const slot = utils.getSlotByDayRow(bDay + off.d, bRow + off.r);
+                return slot && !slot.dataset.eventId;
             });
-        });
+        },
 
-        state.eventDatabase[uniqueEventId] = newRecord;
-        app.ui.renderEventUI(uniqueEventId);
+        pasteCopiedBlockAt: (targetSlot) => {
+            if (!app.actions.canPasteBlockAt(targetSlot)) return false;
+            const bDay = Number(targetSlot.dataset.day), bRow = Number(targetSlot.dataset.row);
+            const slots = state.copiedBlockData.offsets.map(off => utils.getSlotByDayRow(bDay + off.d, bRow + off.r)).filter(Boolean);
+            app.actions.createEventFromSlots(slots, [...state.copiedBlockData.commands], state.copiedBlockData.color);
+        },
 
-        syncEventToServer(uniqueEventId);
-
-        return uniqueEventId;
-    }
-
-    function copyEventToClipboard(eventId) {
-        const event = state.eventDatabase[eventId];
-        if (!event || !event.slots || event.slots.length === 0) return;
-
-        const normalizedSlots = event.slots.map((slot) => ({
-            day: Number(slot.day),
-            row: utils.timeToRow(slot.time)
-        }));
-
-        const minDay = Math.min(...normalizedSlots.map(s => s.day));
-        const minRow = Math.min(...normalizedSlots.map(s => s.row));
-
-        state.copiedBlockData = {
-            commands: [...event.commands],
-            color: event.color || '#007aff',
-            offsets: normalizedSlots.map((slot) => ({
-                dayOffset: slot.day - minDay,
-                rowOffset: slot.row - minRow
-            }))
-        };
-    }
-
-    function canPasteBlockAt(targetSlot, clipboardData = state.copiedBlockData) {
-        if (!targetSlot || !clipboardData) return false;
-
-        const baseDay = Number(targetSlot.dataset.day);
-        const baseRow = Number(targetSlot.dataset.row);
-
-        for (const offset of clipboardData.offsets) {
-            const targetDay = baseDay + offset.dayOffset;
-            const targetRow = baseRow + offset.rowOffset;
-
-            if (targetDay < 0 || targetDay > 6) return false;
-            if (targetRow < 0 || targetRow >= utils.getTotalRows()) return false;
-
-            const slot = utils.getSlotByDayRow(targetDay, targetRow);
-            if (!slot || slot.dataset.eventId) return false;
-        }
-
-        return true;
-    }
-
-    function pasteCopiedBlockAt(targetSlot) {
-        if (!targetSlot || !state.copiedBlockData) return false;
-        if (!canPasteBlockAt(targetSlot, state.copiedBlockData)) return false;
-
-        const baseDay = Number(targetSlot.dataset.day);
-        const baseRow = Number(targetSlot.dataset.row);
-        const uniqueEventId = utils.generateEventId();
-
-        const newRecord = {
-            id: uniqueEventId,
-            commands: [...state.copiedBlockData.commands],
-            color: state.copiedBlockData.color,
-            slots: []
-        };
-
-        state.copiedBlockData.offsets.forEach((offset) => {
-            const day = baseDay + offset.dayOffset;
-            const row = baseRow + offset.rowOffset;
-            const slot = utils.getSlotByDayRow(day, row);
-
-            if (slot) {
-                slot.dataset.eventId = uniqueEventId;
-                slot.classList.add('selected');
-
-                newRecord.slots.push({
-                    day,
-                    time: utils.rowToTime(row)
+        syncEventToServer: async (eventId) => {
+            const evt = state.eventDatabase[eventId];
+            if (!evt || !evt.slots.length) return;
+            const mins = evt.slots.map(s => { const [h, m] = s.time.split(':').map(Number); return h * 60 + m; });
+            try {
+                const res = await fetch('/schedule/set', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: String(eventId), commands: [evt.commands.map(c => `"${c}"`).join(' ')], color: evt.color, day: evt.slots[0].day, start_time: Math.min(...mins), end_time: Math.max(...mins) + 15 })
                 });
-            }
-        });
+                if (res.ok) window.location.reload();
+            } catch (e) { console.error("Sync failed:", e); }
+        },
 
-        state.eventDatabase[uniqueEventId] = newRecord;
-        app.ui.renderEventUI(uniqueEventId);
+        deleteEventFromServer: async (eventId) => {
+            try { await fetch('/schedule/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: String(eventId) }) }); }
+            catch (e) { console.error("Delete failed:", e); }
+        },
 
-        syncEventToServer(uniqueEventId);
+        fetchAndLoadSchedules: async () => {
+            try {
+                const res = await fetch('/schedule/json');
+                const data = await res.json();
+                Object.keys(state.eventDatabase).forEach(clearEventSlots);
+                state.eventDatabase = {};
 
-        return true;
-    }
+                for (const key in data) {
+                    const evt = data[key];
+                    const slots = [], cmds = (evt.commands || []).flatMap(c => c.match(/"([^"]+)"/g)?.map(m => m.replace(/"/g, '')) || [c]);
 
-    // --- SINGLE EVENT SYNC LOGIC ---
-    async function syncEventToServer(eventId) {
-        const evt = state.eventDatabase[eventId];
-        if (!evt || !evt.slots || evt.slots.length === 0) return;
-
-        const timesInMinutes = evt.slots.map(s => {
-            const [h, m] = s.time.split(':').map(Number);
-            return (h * 60) + m;
-        });
-
-        const startTime = Math.min(...timesInMinutes);
-        const endTime = Math.max(...timesInMinutes) + 15;
-        const day = evt.slots[0].day;
-
-        const formattedCommands = [evt.commands.map(cmd => `"${cmd}"`).join(' ')];
-
-        const payload = {
-            id: eventId.toString(),
-            commands: formattedCommands,
-            color: evt.color,
-            day: day,
-            start_time: startTime,
-            end_time: endTime
-        };
-
-        try {
-            const response = await fetch('/schedule/set', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-            // RELOAD UPON SUCCESS
-            window.location.reload();
-
-        } catch (error) {
-            console.error("Failed to sync event to backend:", error);
-        }
-    }
-
-    async function deleteEventFromServer(eventId) {
-        try {
-            const response = await fetch('/schedule/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: eventId.toString() })
-            });
-
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            console.log(`Successfully deleted event ${eventId} from backend.`);
-        } catch (error) {
-            console.error("Failed to delete event from backend:", error);
-        }
-    }
-
-    async function fetchAndLoadSchedules() {
-        try {
-            const response = await fetch('/schedule/json');
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-            const data = await response.json();
-
-            for (const id in state.eventDatabase) {
-                clearEventSlots(id);
-            }
-            state.eventDatabase = {};
-
-            for (const key in data) {
-                const evt = data[key];
-                const slotsArray = [];
-                const eventId = evt.id.toString();
-
-                let cleanCommands = [];
-                if (Array.isArray(evt.commands)) {
-                    evt.commands.forEach(cmdStr => {
-                        const matches = cmdStr.match(/"([^"]+)"/g);
-                        if (matches) {
-                            matches.forEach(m => {
-                                cleanCommands.push(m.replace(/"/g, ''));
-                            });
-                        } else {
-                            cleanCommands.push(cmdStr);
-                        }
-                    });
-                }
-
-                for (let m = evt.start_time; m < evt.end_time; m += 15) {
-                    const hour = Math.floor(m / 60);
-                    const minute = (m % 60).toString().padStart(2, '0');
-                    const timeStr = `${hour}:${minute}`;
-
-                    slotsArray.push({
-                        day: evt.day,
-                        time: timeStr
-                    });
-
-                    const domSlot = calendar.querySelector(`.slot[data-day="${evt.day}"][data-time="${timeStr}"]`);
-                    if (domSlot) {
-                        domSlot.dataset.eventId = eventId;
+                    for (let m = evt.start_time; m < evt.end_time; m += 15) {
+                        const timeStr = `${Math.floor(m / 60)}:${(m % 60).toString().padStart(2, '0')}`;
+                        slots.push({ day: evt.day, time: timeStr });
+                        const domSlot = calendar.querySelector(`.slot[data-day="${evt.day}"][data-time="${timeStr}"]`);
+                        if (domSlot) domSlot.dataset.eventId = evt.id;
                     }
+                    state.eventDatabase[evt.id] = { id: String(evt.id), commands: cmds, color: evt.color || '#33ff33', slots };
+                    app.ui.renderEventUI(evt.id);
                 }
+            } catch (e) { console.error("Load failed:", e); }
+        },
 
-                state.eventDatabase[eventId] = {
-                    id: eventId,
-                    commands: cleanCommands,
-                    color: evt.color || '#33ff33',
-                    slots: slotsArray
-                };
-            }
-
-            for (const id in state.eventDatabase) {
-                app.ui.renderEventUI(id);
-            }
-
-        } catch (error) {
-            console.error("Failed to load schedules from server:", error);
+        bindMenuActions: () => {
+            if (app.actions._bound) return; app.actions._bound = true;
+            document.addEventListener('pointerdown', (e) => {
+                if (!e.target.closest('.context-menu, .modal-overlay, .slot.selected')) hideMenu();
+            });
+            els.editCmdBtn.onclick = () => { if (state.activeEventId) app.actions.editEvent(state.activeEventId); hideMenu(); };
+            els.copyBtn.onclick = () => { if (state.activeEventId) app.actions.copyEventToClipboard(state.activeEventId); hideMenu(); };
+            els.pasteBtn.onclick = () => { if (state.menuTargetSlot) app.actions.pasteCopiedBlockAt(state.menuTargetSlot); hideMenu(); };
+            els.deleteBtn.onclick = () => { if (state.activeEventId) app.actions.deleteEvent(state.activeEventId); hideMenu(); };
         }
-    }
-
-    function bindMenuActions() {
-        if (app.actions._bound) return;
-        app.actions._bound = true;
-
-        document.addEventListener('pointerdown', (e) => {
-            const clickedInsideMenu = els.menu && els.menu.contains(e.target);
-            const clickedInsideModal = els.modalOverlay && els.modalOverlay.contains(e.target);
-            const clickedSelectedSlot = e.target.closest && e.target.closest('.slot.selected');
-
-            if (!clickedInsideMenu && !clickedInsideModal && !clickedSelectedSlot) {
-                hideMenu();
-            }
-        });
-
-        els.editCmdBtn.addEventListener('click', () => {
-            if (state.activeEventId) {
-                editEvent(state.activeEventId);
-            }
-            hideMenu();
-        });
-
-        els.copyBtn.addEventListener('click', () => {
-            if (state.activeEventId) {
-                copyEventToClipboard(state.activeEventId);
-            }
-            hideMenu();
-        });
-
-        els.pasteBtn.addEventListener('click', () => {
-            if (state.menuTargetSlot && state.copiedBlockData) {
-                pasteCopiedBlockAt(state.menuTargetSlot);
-            }
-            hideMenu();
-        });
-
-        els.deleteBtn.addEventListener('click', () => {
-            if (state.activeEventId) {
-                deleteEvent(state.activeEventId);
-            }
-            hideMenu();
-        });
-    }
-
-    app.actions.hideMenu = hideMenu;
-    app.actions.showMenu = showMenu;
-    app.actions.clearEventSlots = clearEventSlots;
-    app.actions.deleteEvent = deleteEvent;
-    app.actions.editEvent = editEvent;
-    app.actions.createEventFromSlots = createEventFromSlots;
-    app.actions.copyEventToClipboard = copyEventToClipboard;
-    app.actions.canPasteBlockAt = canPasteBlockAt;
-    app.actions.pasteCopiedBlockAt = pasteCopiedBlockAt;
-    app.actions.syncEventToServer = syncEventToServer;
-    app.actions.deleteEventFromServer = deleteEventFromServer;
-    app.actions.bindMenuActions = bindMenuActions;
-    app.actions.fetchAndLoadSchedules = fetchAndLoadSchedules;
+    });
 })();
