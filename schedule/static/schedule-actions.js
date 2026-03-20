@@ -90,11 +90,10 @@
             const mins = evt.slots.map(s => { const [h, m] = s.time.split(':').map(Number); return h * 60 + m; });
 
             try {
-                // MODIFIED: Construct payload matching the new exact array/JSON spec
                 const payload = {
                     id: Number(eventId),
-                    commands: evt.commands, // Pass clean array directly
-                    displayed_color: evt.color ? evt.color.replace('#', '') : "33ff33", // Strip '#' for the backend
+                    commands: evt.commands,
+                    displayed_color: evt.color ? evt.color.replace('#', '') : "33ff33",
                     day: Number(evt.slots[0].day),
                     start_time: Math.min(...mins),
                     end_time: Math.max(...mins) + 15
@@ -112,11 +111,14 @@
 
         deleteEventFromServer: async (eventId) => {
             try {
-                await fetch('/schedule/delete', {
+                const res = await fetch('/schedule/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: Number(eventId) })
                 });
+
+                // ADDED: Reload the window upon successful deletion
+                if (res.ok) window.location.reload();
             }
             catch (e) { console.error("Delete failed:", e); }
         },
@@ -129,14 +131,10 @@
                 Object.keys(state.eventDatabase).forEach(clearEventSlots);
                 state.eventDatabase = {};
 
-                // MODIFIED: Iterate over an Array instead of an Object
                 for (const evt of data) {
                     const numericId = Number(evt.id);
-
-                    // MODIFIED: Commands are now a clean array straight from the backend
                     const cmds = Array.isArray(evt.commands) ? evt.commands : [];
 
-                    // MODIFIED: Re-attach '#' to color hex for frontend UI rendering
                     let colorHex = evt.displayed_color || '33ff33';
                     if (!colorHex.startsWith('#')) colorHex = '#' + colorHex;
 
