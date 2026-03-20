@@ -159,3 +159,10 @@ h2 { margin: 0 0 20px; font-weight: 600; }
 .menu-btn:hover { background: var(--border-light); }
 .menu-btn-delete { color: #ff453a; }
 
+.slot.end-marker {
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    border-bottom: none !important;
+    border-right: none !important;
+}

@@ -1,0 +1,10 @@
+make my arduino app work based on the flask app i had. all the templates static files content already exist in the includes. output complete drop in code for the arduino app esp32.
+
+const char* ssid = "XeWe Labs";
+const char* password = "Buildcoolshit";
+
+arduino app template:
+
+
+app.py for the refertence:
+
