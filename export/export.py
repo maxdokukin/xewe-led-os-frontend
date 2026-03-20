@@ -2,7 +2,7 @@ import os
 import shutil
 import datetime
 import argparse
-
+import re
 
 def process_flask_to_arduino(input_path, output_path):
     # Ensure absolute paths
@@ -24,8 +24,15 @@ def process_flask_to_arduino(input_path, output_path):
     os.makedirs(final_output_dir, exist_ok=True)
     print(f"Output Directory: {final_output_dir}")
 
-    # Store tuples of (include_path, var_name)
+    # Store tuples of (include_path, var_name, web_route, mime_type)
     generated_files_info = []
+
+    # MIME Type mapping
+    mime_types = {
+        'html': 'text/html',
+        'css': 'text/css',
+        'js': 'application/javascript'
+    }
 
     # 3. Process templates/ and static/ while preserving paths
     target_dirs = ['templates', 'static']
@@ -52,10 +59,21 @@ def process_flask_to_arduino(input_path, output_path):
                 name, ext = os.path.splitext(file)
                 ext = ext.lstrip('.')  # Remove the dot
 
+                # Determine MIME type
+                mime_type = mime_types.get(ext, 'text/plain')
+
                 # Make names C++ compliant (e.g., replace hyphens with underscores)
                 safe_name = name.replace('-', '_').replace('.', '_')
                 h_filename = f"{safe_name}_{ext}.h"
                 var_name = f"{safe_name.upper()}_{ext.upper()}"
+
+                # Calculate the exact web route the browser will ask for
+                if directory == 'templates' and file == 'index.html':
+                    web_route = "/"
+                else:
+                    # e.g., /static/calendar-utils.js
+                    route_path = os.path.join(rel_dir, file).replace(os.sep, '/')
+                    web_route = f"/{route_path}"
 
                 # Read original web file
                 try:
@@ -64,6 +82,12 @@ def process_flask_to_arduino(input_path, output_path):
                 except UnicodeDecodeError:
                     print(f"Skipping binary/non-utf8 file: {file_path}")
                     continue
+
+                # --- THE JINJA2 KILLER ---
+                # Replaces {{ url_for('static', filename='style.css') }} with /static/style.css
+                jinja_pattern = r"\{\{\s*url_for\(['\"]static['\"]\s*,\s*filename=['\"](.+?)['\"]\)\s*\}\}"
+                content = re.sub(jinja_pattern, r"/static/\1", content)
+                # -------------------------
 
                 # Write Arduino .h file inside the preserved directory structure
                 h_filepath = os.path.join(out_dir_path, h_filename)
@@ -79,7 +103,7 @@ def process_flask_to_arduino(input_path, output_path):
 
                 # Build the include path using forward slashes for C++ compatibility
                 include_path = os.path.join(rel_dir, h_filename).replace(os.sep, '/')
-                generated_files_info.append((include_path, var_name))
+                generated_files_info.append((include_path, var_name, web_route, mime_type))
 
     # 4. Copy app.py for LLM processing
     app_py_path = os.path.join(input_path, 'app.py')
@@ -87,27 +111,43 @@ def process_flask_to_arduino(input_path, output_path):
         shutil.copy2(app_py_path, os.path.join(final_output_dir, 'app.py'))
         print("Copied app.py successfully.")
 
-    # 5. Generate dirname_app.ino
+    # 5. Generate dirname_app.ino with auto-wiring
     ino_filename = f"{project_basename}_app.ino"
     ino_filepath = os.path.join(final_output_dir, ino_filename)
 
     with open(ino_filepath, 'w', encoding='utf-8') as f:
-        # Include all generated headers at the top, exposing the PROGMEM var names
-        f.write("// --- Auto-Generated Web Files ---\n")
-        for include_path, var_name in generated_files_info:
-            f.write(f'#include "{include_path}" // Provides PROGMEM string: {var_name}\n')
-        f.write("// --------------------------------\n")
+        f.write("#include <WiFi.h>\n")
+        f.write("#include <WebServer.h>\n\n")
+        f.write("WebServer server(80);\n\n")
 
-        f.write("\nvoid setup() {\n")
-        f.write("  Serial.begin(115200);\n")
-        f.write("  // TODO: Setup WiFi and WebServer routes here\n")
+        # Include all generated headers
+        f.write("// --- Auto-Generated Web Files ---\n")
+        for include_path, var_name, _, _ in generated_files_info:
+            f.write(f'#include "{include_path}"\n')
+        f.write("// --------------------------------\n\n")
+
+        f.write("void setupRoutes() {\n")
+        f.write("  // --- Auto-Generated Routes ---\n")
+        for _, var_name, web_route, mime_type in generated_files_info:
+            # Wire up the server.on calls automatically using the exact expected file names
+            f.write(f'  server.on("{web_route}", HTTP_GET, []() {{\n')
+            f.write(f'    server.sendHeader("Access-Control-Allow-Origin", "*");\n')
+            f.write(f'    server.send_P(200, "{mime_type}", {var_name});\n')
+            f.write(f'  }});\n')
         f.write("}\n\n")
+
+        f.write("void setup() {\n")
+        f.write("  Serial.begin(115200);\n")
+        f.write("  // TODO: Setup WiFi here\n\n")
+        f.write("  setupRoutes();\n")
+        f.write("  server.begin();\n")
+        f.write("}\n\n")
+
         f.write("void loop() {\n")
-        f.write("  // TODO: Handle client requests\n")
+        f.write("  server.handleClient();\n")
         f.write("}\n")
 
     print(f"Successfully generated {len(generated_files_info)} header files and {ino_filename}.")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert Flask static/templates to Arduino headers.")
