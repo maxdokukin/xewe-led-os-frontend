@@ -1,3 +1,6 @@
+#pragma once
+#include <pgmspace.h>
+static const char SCHEDULE_UI_JS[] PROGMEM = R"rawliteral(
 // calendar-ui.js
 (function () {
     const app = window.CalendarApp;
@@ -166,3 +169,4 @@ function updateNowIndicator() {
         openModal, closeModal, updateNowIndicator, applyFixedScale, renderEventUI, syncTimeRailScroll
     });
 })();
+)rawliteral";
