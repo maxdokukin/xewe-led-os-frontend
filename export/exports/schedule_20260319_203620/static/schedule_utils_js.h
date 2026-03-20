@@ -1,3 +1,6 @@
+#pragma once
+#include <pgmspace.h>
+static const char SCHEDULE_UTILS_JS[] PROGMEM = R"rawliteral(
 (function () {
     // Global App Initialization
     window.CalendarApp = window.CalendarApp || {
@@ -35,3 +38,4 @@
         }
     });
 })();
+)rawliteral";

@@ -1,3 +1,6 @@
+#pragma once
+#include <pgmspace.h>
+static const char SCHEDULE_ACTIONS_JS[] PROGMEM = R"rawliteral(
 (function () {
     const app = window.CalendarApp;
     const { calendar, state, els, utils } = app;
@@ -146,3 +149,4 @@
         }
     });
 })();
+)rawliteral";

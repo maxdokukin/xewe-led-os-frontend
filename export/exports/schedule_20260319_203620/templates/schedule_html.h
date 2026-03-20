@@ -1,10 +1,13 @@
+#pragma once
+#include <pgmspace.h>
+static const char SCHEDULE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>XeWe Led Scheduler</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='schedule-style.css') }}">
+    <title>Apple-Style Availability Calendar</title>
+    <link rel="stylesheet" href="/static/schedule-style.css">
 </head>
 <body>
 
@@ -22,3 +25,4 @@
 
 </body>
 </html>
+)rawliteral";

@@ -4,17 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9d750d96-d507-47ee-a8ba-9da8da1efc17" name="Changes" comment="adding export script">
-      <change beforePath="$PROJECT_DIR$/export/export.py" beforeDir="false" afterPath="$PROJECT_DIR$/export/export.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/export/exports/app_py_to_ino_prompt.txt" beforeDir="false" afterPath="$PROJECT_DIR$/export/exports/app_py_to_ino_prompt.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/calendar-actions.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-actions.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/calendar-core.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-core.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/calendar-interactions.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-interactions.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/calendar-ui.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-ui.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/calendar-utils.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-utils.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/static/style.css" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-style.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/schedule/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/templates/schedule.html" afterDir="false" />
+    <list default="true" id="9d750d96-d507-47ee-a8ba-9da8da1efc17" name="Changes" comment="fixed current time sliding line">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/schedule/static/schedule-actions.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-actions.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/schedule/static/schedule-utils.js" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/static/schedule-utils.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/schedule/templates/schedule.html" beforeDir="false" afterPath="$PROJECT_DIR$/schedule/templates/schedule.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -128,7 +122,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1773956380230</updated>
-      <workItem from="1773956381377" duration="6649000" />
+      <workItem from="1773956381377" duration="8892000" />
     </task>
     <task id="LOCAL-00001" summary="adding export script">
       <option name="closed" value="true" />
@@ -138,7 +132,23 @@
       <option name="project" value="LOCAL" />
       <updated>1773971727945</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="added export script">
+      <option name="closed" value="true" />
+      <created>1773975447766</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1773975447766</updated>
+    </task>
+    <task id="LOCAL-00003" summary="fixed current time sliding line">
+      <option name="closed" value="true" />
+      <created>1773975518756</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1773975518756</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -146,10 +156,12 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="adding export script" />
-    <option name="LAST_COMMIT_MESSAGE" value="adding export script" />
+    <MESSAGE value="added export script" />
+    <MESSAGE value="fixed current time sliding line" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixed current time sliding line" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/xewe_led_os_frontend$Flask__schedule_app_py_.coverage" NAME="Flask (schedule/app.py) Coverage Results" MODIFIED="1773975337223" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/xewe_led_os_frontend$Flask__schedule_app_py_.coverage" NAME="Flask (schedule/app.py) Coverage Results" MODIFIED="1773975471594" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/xewe_led_os_frontend$xewe_led_os_frontend.coverage" NAME="xewe-led-os-frontend Coverage Results" MODIFIED="1773969010522" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
   </component>
 </project>
