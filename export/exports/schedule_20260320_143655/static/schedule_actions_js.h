@@ -6,6 +6,16 @@ static const char SCHEDULE_ACTIONS_JS[] PROGMEM = R"rawliteral(
     const app = window.CalendarApp;
     const { calendar, state, els, utils } = app;
 
+    // ADDED: Restore clipboard from localStorage on load so it survives reloads
+    try {
+        const savedClip = localStorage.getItem('scheduler_clipboard');
+        if (savedClip) {
+            state.copiedBlockData = JSON.parse(savedClip);
+        }
+    } catch (e) {
+        console.warn("Could not restore clipboard data", e);
+    }
+
     function hideMenu() {
         if (!els.menu) return;
         els.menu.style.display = 'none';
@@ -68,7 +78,11 @@ static const char SCHEDULE_ACTIONS_JS[] PROGMEM = R"rawliteral(
             if (!evt || !evt.slots.length) return;
             const norm = evt.slots.map(s => ({ day: Number(s.day), row: utils.timeToRow(s.time) }));
             const minDay = Math.min(...norm.map(s => s.day)), minRow = Math.min(...norm.map(s => s.row));
+
             state.copiedBlockData = { commands: [...evt.commands], color: evt.color || '#007aff', offsets: norm.map(s => ({ d: s.day - minDay, r: s.row - minRow })) };
+
+            // ADDED: Write the copied block data to localStorage
+            localStorage.setItem('scheduler_clipboard', JSON.stringify(state.copiedBlockData));
         },
 
         canPasteBlockAt: (targetSlot, clip = state.copiedBlockData) => {
@@ -120,7 +134,6 @@ static const char SCHEDULE_ACTIONS_JS[] PROGMEM = R"rawliteral(
                     body: JSON.stringify({ id: Number(eventId) })
                 });
 
-                // ADDED: Reload the window upon successful deletion
                 if (res.ok) window.location.reload();
             }
             catch (e) { console.error("Delete failed:", e); }
